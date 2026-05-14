@@ -23,6 +23,9 @@ class RecipeCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    // ✅ YENİ: Kullanıcının diline göre lokalize içerik
+    final langCode = isEnglish ? 'en' : 'tr';
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -31,9 +34,7 @@ class RecipeCard extends StatelessWidget {
           color: isDark ? AppColors.darkCard : AppColors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isDark
-                ? const Color(0xFF3D3530)
-                : AppColors.outline,
+            color: isDark ? const Color(0xFF3D3530) : AppColors.outline,
             width: 1,
           ),
           boxShadow: isDark
@@ -53,8 +54,8 @@ class RecipeCard extends StatelessWidget {
             Stack(
               children: [
                 ClipRRect(
-                  borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(15)),
+                  borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(15)),
                   child: recipe.imageUrl != null
                       ? CachedNetworkImage(
                     imageUrl: recipe.imageUrl!,
@@ -108,7 +109,7 @@ class RecipeCard extends StatelessWidget {
                   ),
                 ),
 
-                // Admin sil
+                // Admin sil butonu
                 if (onDelete != null)
                   Positioned(
                     top: 12,
@@ -151,23 +152,21 @@ class RecipeCard extends StatelessWidget {
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                         letterSpacing: 0.5,
-                        color:
-                        AppColors.categoryColors[recipe.category] ??
+                        color: AppColors.categoryColors[recipe.category] ??
                             AppColors.primary,
                       ),
                     ),
                   ),
                   const SizedBox(height: 8),
 
-                  // Başlık
+                  // ✅ YENİ: Lokalize başlık
                   Text(
-                    recipe.title,
+                    recipe.localizedTitle(langCode),
                     style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.w600,
-                      color: isDark
-                          ? AppColors.darkTextDark
-                          : AppColors.textDark,
+                      color:
+                      isDark ? AppColors.darkTextDark : AppColors.textDark,
                       height: 1.3,
                     ),
                     maxLines: 2,
@@ -175,14 +174,13 @@ class RecipeCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
 
-                  // Açıklama
+                  // ✅ YENİ: Lokalize açıklama
                   Text(
-                    recipe.description,
+                    recipe.localizedDescription(langCode),
                     style: TextStyle(
                       fontSize: 13,
-                      color: isDark
-                          ? AppColors.darkTextGrey
-                          : AppColors.textGrey,
+                      color:
+                      isDark ? AppColors.darkTextGrey : AppColors.textGrey,
                       height: 1.4,
                     ),
                     maxLines: 2,
@@ -192,9 +190,7 @@ class RecipeCard extends StatelessWidget {
 
                   // Divider
                   Divider(
-                    color: isDark
-                        ? const Color(0xFF3D3530)
-                        : AppColors.outline,
+                    color: isDark ? const Color(0xFF3D3530) : AppColors.outline,
                     height: 1,
                   ),
                   const SizedBox(height: 12),
@@ -283,17 +279,13 @@ class RecipeCard extends StatelessWidget {
     return Container(
       height: 200,
       width: double.infinity,
-      color: isDark
-          ? AppColors.darkCard
-          : AppColors.surfaceContainerHigh,
+      color: isDark ? AppColors.darkCard : AppColors.surfaceContainerHigh,
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.restaurant_menu,
               size: 48,
-              color: isDark
-                  ? AppColors.darkTextGrey
-                  : AppColors.textGrey),
+              color: isDark ? AppColors.darkTextGrey : AppColors.textGrey),
           const SizedBox(height: 8),
           Text(
             'No photo',
@@ -307,8 +299,7 @@ class RecipeCard extends StatelessWidget {
     );
   }
 
-  Widget _metaChip(IconData icon, String label, bool isDark,
-      {Color? color}) {
+  Widget _metaChip(IconData icon, String label, bool isDark, {Color? color}) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -343,17 +334,23 @@ class RecipeCard extends StatelessWidget {
 
   String _difficultyLabel(String d, bool isEnglish) {
     switch (d) {
-      case 'easy': return isEnglish ? 'Easy' : 'Kolay';
-      case 'hard': return isEnglish ? 'Hard' : 'Zor';
-      default: return isEnglish ? 'Medium' : 'Orta';
+      case 'easy':
+        return isEnglish ? 'Easy' : 'Kolay';
+      case 'hard':
+        return isEnglish ? 'Hard' : 'Zor';
+      default:
+        return isEnglish ? 'Medium' : 'Orta';
     }
   }
 
   Color _difficultyColor(String d) {
     switch (d) {
-      case 'easy': return const Color(0xFF2E7D32);
-      case 'hard': return const Color(0xFFBA1A1A);
-      default: return const Color(0xFFE65100);
+      case 'easy':
+        return const Color(0xFF2E7D32);
+      case 'hard':
+        return const Color(0xFFBA1A1A);
+      default:
+        return const Color(0xFFE65100);
     }
   }
 }

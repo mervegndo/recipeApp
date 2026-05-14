@@ -1,4 +1,10 @@
 // lib/models/recipe_model.dart
+//
+// DEĞİŞİKLİKLER:
+//   - `originalLanguage` alanı eklendi (tarifi kimin dilinde yüklediği)
+//   - `translations` map alanı eklendi (Cloud Function tarafından doldurulur)
+//   - `localizedTitle`, `localizedDescription`, `localizedIngredients`,
+//     `localizedSteps` getter'ları eklendi — UI her zaman bunları kullanır.
 
 class RecipeModel {
   final String id;
@@ -12,15 +18,24 @@ class RecipeModel {
   final String? imageUrl;
   final DateTime createdAt;
 
-  // Yeni alanlar
+  // Mevcut alanlar
   final int cookingTimeMinutes;
   final int servings;
-  final String difficulty; // 'easy', 'medium', 'hard'
+  final String difficulty;
   final int? calories;
-  final List<String> dietTags; // 'vegetarian', 'vegan', 'diet', 'protein', 'carb'
+  final List<String> dietTags;
   final int favoriteCount;
   final double averageRating;
   final int ratingCount;
+
+  // YENİ: Çeviri alanları
+  /// Tarihin orijinal dili: "en" veya "tr"
+  final String originalLanguage;
+
+  /// Cloud Function tarafından doldurulan çeviriler.
+  /// Yapısı: { "tr": { "title": "...", "description": "...",
+  ///                    "ingredients": [...], "steps": [...] } }
+  final Map<String, dynamic> translations;
 
   RecipeModel({
     required this.id,
@@ -41,7 +56,63 @@ class RecipeModel {
     this.favoriteCount = 0,
     this.averageRating = 0.0,
     this.ratingCount = 0,
+    this.originalLanguage = 'en',
+    this.translations = const {},
   });
+
+  // ─── Lokalizasyon getter'ları ─────────────────────────────────────────────
+  // UI katmanı her zaman bu getter'ları kullanmalı, title/description'ı değil.
+
+  /// Verilen [languageCode] için lokalize başlık döndürür.
+  /// Çeviri yoksa orijinal başlığa fallback yapar.
+  String localizedTitle(String languageCode) {
+    if (languageCode == originalLanguage) return title;
+    final t = translations[languageCode];
+    if (t != null && t['title'] != null && (t['title'] as String).isNotEmpty) {
+      return t['title'] as String;
+    }
+    return title; // fallback: orijinal
+  }
+
+  /// Verilen [languageCode] için lokalize açıklama döndürür.
+  String localizedDescription(String languageCode) {
+    if (languageCode == originalLanguage) return description;
+    final t = translations[languageCode];
+    if (t != null &&
+        t['description'] != null &&
+        (t['description'] as String).isNotEmpty) {
+      return t['description'] as String;
+    }
+    return description;
+  }
+
+  /// Verilen [languageCode] için lokalize malzeme listesi döndürür.
+  List<String> localizedIngredients(String languageCode) {
+    if (languageCode == originalLanguage) return ingredients;
+    final t = translations[languageCode];
+    if (t != null && t['ingredients'] != null) {
+      return List<String>.from(t['ingredients'] as List);
+    }
+    return ingredients;
+  }
+
+  /// Verilen [languageCode] için lokalize adımlar döndürür.
+  List<String> localizedSteps(String languageCode) {
+    if (languageCode == originalLanguage) return steps;
+    final t = translations[languageCode];
+    if (t != null && t['steps'] != null) {
+      return List<String>.from(t['steps'] as List);
+    }
+    return steps;
+  }
+
+  /// Çeviri henüz hazır mı?
+  bool hasTranslation(String languageCode) {
+    if (languageCode == originalLanguage) return true;
+    return translations.containsKey(languageCode);
+  }
+
+  // ─── fromMap / toMap ──────────────────────────────────────────────────────
 
   factory RecipeModel.fromMap(Map<String, dynamic> map, String id) {
     return RecipeModel(
@@ -65,6 +136,9 @@ class RecipeModel {
       favoriteCount: map['favoriteCount'] ?? 0,
       averageRating: (map['averageRating'] ?? 0.0).toDouble(),
       ratingCount: map['ratingCount'] ?? 0,
+      // YENİ alanlar
+      originalLanguage: map['originalLanguage'] ?? 'en',
+      translations: Map<String, dynamic>.from(map['translations'] ?? {}),
     );
   }
 
@@ -87,6 +161,11 @@ class RecipeModel {
       'favoriteCount': favoriteCount,
       'averageRating': averageRating,
       'ratingCount': ratingCount,
+      // YENİ alanlar (translations Cloud Function tarafından eklenir,
+      // ama ilk kayıtta boş map olarak göndermek güvenlidir)
+      'originalLanguage': originalLanguage,
+      // 'translations' burada intentionally gönderilmiyor —
+      // Cloud Function bu alanı kendisi yönetir.
     };
   }
 }
