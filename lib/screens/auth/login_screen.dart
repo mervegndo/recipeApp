@@ -1,6 +1,7 @@
 // lib/screens/auth/login_screen.dart
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../services/auth_service.dart';
 import '../../utils/app_constants.dart';
 import 'register_screen.dart';
@@ -27,12 +28,40 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _isLoading = false;
   bool _obscurePassword = true;
+  bool _rememberMe = false;
 
   @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _loadSavedCredentials();
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedEmail = prefs.getString('saved_email') ?? '';
+    final savedPassword = prefs.getString('saved_password') ?? '';
+    final rememberMe = prefs.getBool('remember_me') ?? false;
+
+    if (rememberMe && savedEmail.isNotEmpty) {
+      setState(() {
+        _emailController.text = savedEmail;
+        _passwordController.text = savedPassword;
+        _rememberMe = true;
+      });
+    }
+  }
+
+  Future<void> _saveCredentials() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (_rememberMe) {
+      await prefs.setString('saved_email', _emailController.text.trim());
+      await prefs.setString('saved_password', _passwordController.text);
+      await prefs.setBool('remember_me', true);
+    } else {
+      await prefs.remove('saved_email');
+      await prefs.remove('saved_password');
+      await prefs.setBool('remember_me', false);
+    }
   }
 
   Future<void> _login() async {
@@ -43,6 +72,7 @@ class _LoginScreenState extends State<LoginScreen> {
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
+      await _saveCredentials();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -62,21 +92,15 @@ class _LoginScreenState extends State<LoginScreen> {
       context: context,
       builder: (_) => AlertDialog(
         title: Text(widget.strings.forgotPassword),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(widget.strings.enterEmailToReset, 
-              style: const TextStyle(fontSize: 14, color: AppColors.textMedium)),
-            const SizedBox(height: 16),
-            TextField(
-              controller: emailController,
-              keyboardType: TextInputType.emailAddress,
-              decoration: InputDecoration(
-                labelText: widget.strings.email,
-                prefixIcon: const Icon(Icons.email_outlined),
-              ),
-            ),
-          ],
+        content: TextField(
+          controller: emailController,
+          keyboardType: TextInputType.emailAddress,
+          decoration: InputDecoration(
+            labelText: widget.strings.isEnglish
+                ? 'Your email address'
+                : 'E-posta adresiniz',
+            prefixIcon: const Icon(Icons.email_outlined),
+          ),
         ),
         actions: [
           TextButton(
@@ -85,18 +109,15 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              final email = emailController.text.trim();
-              if (email.isEmpty) return;
-              
+              if (emailController.text.trim().isEmpty) return;
               try {
-                await _authService.resetPassword(email);
+                await _authService.resetPassword(emailController.text.trim());
                 if (mounted) {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(widget.strings.passwordResetSent),
                       backgroundColor: Colors.green,
-                      behavior: SnackBarBehavior.floating,
                     ),
                   );
                 }
@@ -115,6 +136,13 @@ class _LoginScreenState extends State<LoginScreen> {
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
   }
 
   @override
@@ -142,9 +170,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         height: 140,
                       ),
                       const SizedBox(height: 16),
-                      Text(
+                      const Text(
                         'Lezzet Rehberi',
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 28,
                             fontWeight: FontWeight.bold,
                             color: AppColors.primary),
@@ -172,12 +200,18 @@ class _LoginScreenState extends State<LoginScreen> {
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
                   decoration: InputDecoration(
-                    labelText: widget.strings.email,
+                    labelText: widget.strings.isEnglish ? 'Email' : 'E-posta',
                     prefixIcon: const Icon(Icons.email_outlined),
                   ),
                   validator: (v) {
-                    if (v == null || v.isEmpty) return widget.strings.emailRequired;
-                    if (!v.contains('@')) return widget.strings.invalidEmail;
+                    if (v == null || v.isEmpty)
+                      return widget.strings.isEnglish
+                          ? 'Email cannot be empty'
+                          : 'E-posta boş olamaz';
+                    if (!v.contains('@'))
+                      return widget.strings.isEnglish
+                          ? 'Enter a valid email'
+                          : 'Geçerli e-posta girin';
                     return null;
                   },
                 ),
@@ -188,31 +222,52 @@ class _LoginScreenState extends State<LoginScreen> {
                   controller: _passwordController,
                   obscureText: _obscurePassword,
                   decoration: InputDecoration(
-                    labelText: widget.strings.password,
+                    labelText:
+                        widget.strings.isEnglish ? 'Password' : 'Şifre',
                     prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
                       icon: Icon(_obscurePassword
                           ? Icons.visibility_outlined
                           : Icons.visibility_off_outlined),
-                      onPressed: () => setState(
-                              () => _obscurePassword = !_obscurePassword),
+                      onPressed: () =>
+                          setState(() => _obscurePassword = !_obscurePassword),
                     ),
                   ),
                   validator: (v) {
-                    if (v == null || v.isEmpty) return widget.strings.passwordRequired;
+                    if (v == null || v.isEmpty)
+                      return widget.strings.isEnglish
+                          ? 'Password cannot be empty'
+                          : 'Şifre boş olamaz';
                     return null;
                   },
                 ),
 
-                // Şifremi unuttum
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    onPressed: _showForgotPassword,
-                    child: Text(widget.strings.forgotPassword,
-                        style:
-                        const TextStyle(color: AppColors.primary)),
-                  ),
+                // Remember Me
+                Row(
+                  children: [
+                    Checkbox(
+                      value: _rememberMe,
+                      activeColor: AppColors.primary,
+                      onChanged: (value) =>
+                          setState(() => _rememberMe = value ?? false),
+                    ),
+                    Text(
+                      widget.strings.isEnglish
+                          ? 'Remember Me'
+                          : 'Beni Hatırla',
+                      style: TextStyle(
+                          color: isDark
+                              ? AppColors.darkTextGrey
+                              : AppColors.textGrey),
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: _showForgotPassword,
+                      child: Text(widget.strings.forgotPassword,
+                          style:
+                              const TextStyle(color: AppColors.primary)),
+                    ),
+                  ],
                 ),
 
                 const SizedBox(height: 8),
@@ -224,12 +279,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: _isLoading ? null : _login,
                     child: _isLoading
                         ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2))
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2))
                         : Text(widget.strings.login,
-                        style: const TextStyle(fontSize: 16)),
+                            style: const TextStyle(fontSize: 16)),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -265,8 +320,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       onTap: () => Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => RegisterScreen(
-                              strings: widget.strings),
+                          builder: (_) =>
+                              RegisterScreen(strings: widget.strings),
                         ),
                       ),
                       child: Text(widget.strings.register,
