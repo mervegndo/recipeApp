@@ -10,6 +10,7 @@ import '../../services/recipe_service.dart';
 import '../../services/imgbb_service.dart';
 import '../../utils/app_constants.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:translator/translator.dart';
 
 class AddRecipeScreen extends StatefulWidget {
   final AppStrings strings;
@@ -54,6 +55,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
   Uint8List? _imageBytes;
   bool _isLoading = false;
   final _ingredientFocusNode = FocusNode();
+  final translator = GoogleTranslator();
 
   @override
   void dispose() {
@@ -109,15 +111,31 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
       final ingredientRef =
       FirebaseFirestore.instance.collection('ingredients');
 
+      final translationToEn = await translator.translate(
+        ingredientName,
+        to: 'en',
+      );
+
+      final translationToTr = await translator.translate(
+        ingredientName,
+        to: 'tr',
+      );
+
+      final ingredientEn = translationToEn.text.toLowerCase();
+      final ingredientTr = translationToTr.text.toLowerCase();
+
       final existing = await ingredientRef
-          .where('searchName', isEqualTo: ingredientName.toLowerCase())
+          .where('searchEn', isEqualTo: ingredientEn)
           .limit(1)
           .get();
 
       if (existing.docs.isEmpty) {
         await ingredientRef.add({
-          'name': ingredientName,
-          'searchName': ingredientName.toLowerCase(),
+          'nameOriginal': ingredientName,
+          'nameEn': ingredientEn,
+          'nameTr': ingredientTr,
+          'searchEn': ingredientEn,
+          'searchTr': ingredientTr,
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
@@ -476,14 +494,22 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
 
                     final snapshot = await FirebaseFirestore.instance
                         .collection('ingredients')
-                        .where('searchName', isGreaterThanOrEqualTo: query)
-                        .where('searchName', isLessThanOrEqualTo: '$query\uf8ff')
+                        .where(
+                      s.isEnglish ? 'searchEn' : 'searchTr',
+                      isGreaterThanOrEqualTo: query,
+                    )
+                        .where(
+                      s.isEnglish ? 'searchEn' : 'searchTr',
+                      isLessThanOrEqualTo: '$query\uf8ff',
+                    )
                         .limit(10)
                         .get();
 
-                    return snapshot.docs
-                        .map((doc) => doc['name'].toString())
-                        .toList();
+                    return snapshot.docs.map((doc) {
+                      return s.isEnglish
+                          ? doc['nameEn'].toString()
+                          : doc['nameTr'].toString();
+                    }).toList();
                   },
                   fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
                     return TextFormField(
