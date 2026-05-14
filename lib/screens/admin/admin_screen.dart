@@ -337,6 +337,23 @@ class _AdminScreenState extends State<AdminScreen>
                                   fontSize: 12,
                                   fontWeight: FontWeight.bold)),
                         ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          icon: const Icon(Icons.visibility_outlined,
+                              color: AppColors.primary, size: 20),
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => RecipeDetailScreen(
+                                recipe: recipe,
+                                isAdmin: true,
+                                strings: widget.strings,
+                              ),
+                            ),
+                          ),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
                       ]),
                     ),
                     ...comments.map((doc) {
