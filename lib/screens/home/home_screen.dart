@@ -131,8 +131,7 @@ class _HomeScreenState extends State<HomeScreen> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) =>
-                  AddRecipeScreen(strings: widget.strings),
+              builder: (_) => AddRecipeScreen(strings: widget.strings),
             ),
           );
         },
@@ -148,8 +147,7 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.person_outline,
-              size: 80, color: AppColors.textGrey),
+          const Icon(Icons.person_outline, size: 80, color: AppColors.textGrey),
           const SizedBox(height: 16),
           Text(
             widget.strings.isEnglish
@@ -203,8 +201,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     widget.isGuest
                         ? (s.isEnglish ? 'Guest' : 'Misafir')
                         : (FirebaseAuth.instance.currentUser?.email ?? ''),
-                    style: const TextStyle(
-                        color: Colors.white70, fontSize: 13),
+                    style: const TextStyle(color: Colors.white70, fontSize: 13),
                   ),
                 ],
               ),
@@ -228,7 +225,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 },
               ),
-
 
             // Dark tema toggle
             Padding(
@@ -257,7 +253,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            // Dil toggle
+            // Dil seçeneği — dropdown
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Row(
@@ -267,34 +263,50 @@ class _HomeScreenState extends State<HomeScreen> {
                           ? AppColors.darkTextGrey
                           : AppColors.textGrey),
                   const SizedBox(width: 12),
-                  Text('🇹🇷 TR',
+                  Expanded(
+                    child: Text(
+                      s.language,
                       style: TextStyle(
-                        color: !s.isEnglish
-                            ? AppColors.primary
-                            : (isDark
-                            ? AppColors.darkTextGrey
-                            : AppColors.textGrey),
-                        fontWeight: !s.isEnglish
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                      )),
-                  Switch(
-                    value: s.isEnglish,
-                    activeColor: AppColors.primary,
-                    onChanged: (_) =>
-                        RecipeApp.of(context)?.toggleLanguage(),
+                          color: isDark
+                              ? AppColors.darkTextDark
+                              : AppColors.textDark,
+                          fontSize: 15),
+                    ),
                   ),
-                  Text('🇬🇧 EN',
-                      style: TextStyle(
-                        color: s.isEnglish
-                            ? AppColors.primary
-                            : (isDark
-                            ? AppColors.darkTextGrey
-                            : AppColors.textGrey),
-                        fontWeight: s.isEnglish
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                      )),
+                  DropdownButton<bool>(
+                    value: s.isEnglish,
+                    underline: const SizedBox(),
+                    dropdownColor:
+                    isDark ? AppColors.darkCard : Colors.white,
+                    style: TextStyle(
+                        color: isDark
+                            ? AppColors.darkTextDark
+                            : AppColors.textDark,
+                        fontSize: 14),
+                    items: [
+                      DropdownMenuItem(
+                        value: false,
+                        child: Row(children: [
+                          const Text('🇹🇷 '),
+                          const SizedBox(width: 4),
+                          const Text('Türkçe'),
+                        ]),
+                      ),
+                      DropdownMenuItem(
+                        value: true,
+                        child: Row(children: [
+                          const Text('🇬🇧 '),
+                          const SizedBox(width: 4),
+                          const Text('English'),
+                        ]),
+                      ),
+                    ],
+                    onChanged: (val) {
+                      if (val != s.isEnglish) {
+                        RecipeApp.of(context)?.toggleLanguage();
+                      }
+                    },
+                  ),
                 ],
               ),
             ),
@@ -326,11 +338,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   context: context,
                   builder: (_) => AlertDialog(
                     title: Text(s.privacy),
-                    content: const SingleChildScrollView(
+                    content: SingleChildScrollView(
                       child: Text(
-                        'Bu uygulama, kullanıcıların yemek tariflerini paylaşması amacıyla geliştirilmiştir. '
-                            'Kişisel verileriniz yalnızca uygulama işlevleri için kullanılmakta olup '
-                            'üçüncü şahıslarla paylaşılmamaktadır.',
+                        s.isEnglish
+                            ? 'This application was developed for users to share food recipes. Your personal data is used only for application functions and is not shared with third parties.'
+                            : 'Bu uygulama, kullanıcıların yemek tariflerini paylaşması amacıyla geliştirilmiştir. Kişisel verileriniz yalnızca uygulama işlevleri için kullanılmakta olup üçüncü şahıslarla paylaşılmamaktadır.',
                       ),
                     ),
                     actions: [
@@ -392,8 +404,7 @@ class _HomeScreenState extends State<HomeScreen> {
           style: TextStyle(
             color: color ??
                 (isDark ? AppColors.darkTextDark : AppColors.textDark),
-            fontWeight:
-            color != null ? FontWeight.bold : FontWeight.normal,
+            fontWeight: color != null ? FontWeight.bold : FontWeight.normal,
           )),
       onTap: onTap,
     );
@@ -424,7 +435,6 @@ class _HomeTabState extends State<_HomeTab> {
   final _recipeService = RecipeService();
   String _selectedCategory = 'all';
   String _selectedDietTag = 'all';
-  String _sortBy = 'newest';
 
   final List<Map<String, dynamic>> _categoryIcons = [
     {'key': 'all', 'label': 'Tümü', 'labelEn': 'All', 'icon': Icons.restaurant_menu},
@@ -482,22 +492,27 @@ class _HomeTabState extends State<_HomeTab> {
                         width: 42,
                         height: 42,
                         decoration: BoxDecoration(
-                          color: isDark ? AppColors.darkCard : AppColors.surfaceContainer,
+                          color: isDark
+                              ? AppColors.darkCard
+                              : AppColors.surfaceContainer,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: isDark ? const Color(0xFF3D3530) : AppColors.outline,
+                            color: isDark
+                                ? const Color(0xFF3D3530)
+                                : AppColors.outline,
                           ),
                         ),
                         child: Icon(
                           Icons.menu_rounded,
-                          color: isDark ? AppColors.darkTextDark : AppColors.textDark,
+                          color: isDark
+                              ? AppColors.darkTextDark
+                              : AppColors.textDark,
                           size: 22,
                         ),
                       ),
                     ),
                   ),
 
-                  // Logo + isim ortada
                   Row(
                     children: [
                       Image.asset(
@@ -530,7 +545,8 @@ class _HomeTabState extends State<_HomeTab> {
                       ),
                     ),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
                         color: AppColors.primary,
                         borderRadius: BorderRadius.circular(12),
@@ -545,10 +561,13 @@ class _HomeTabState extends State<_HomeTab> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.casino_outlined, color: Colors.white, size: 18),
+                          const Icon(Icons.casino_outlined,
+                              color: Colors.white, size: 18),
                           const SizedBox(width: 6),
                           Text(
-                            s.isEnglish ? 'What to\nCook?' : 'Bugün ne\npişirsem?',
+                            s.isEnglish
+                                ? 'What to\nCook?'
+                                : 'Bugün ne\npişirsem?',
                             style: const TextStyle(
                               color: Colors.white,
                               fontSize: 11,
@@ -580,9 +599,8 @@ class _HomeTabState extends State<_HomeTab> {
                         : 'Merhaba, ${FirebaseAuth.instance.currentUser?.displayName ?? 'Şef'} 👋'),
                     style: TextStyle(
                       fontSize: 13,
-                      color: isDark
-                          ? AppColors.darkTextGrey
-                          : AppColors.textGrey,
+                      color:
+                      isDark ? AppColors.darkTextGrey : AppColors.textGrey,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -593,9 +611,8 @@ class _HomeTabState extends State<_HomeTab> {
                     style: TextStyle(
                       fontSize: 26,
                       fontWeight: FontWeight.w700,
-                      color: isDark
-                          ? AppColors.darkTextDark
-                          : AppColors.textDark,
+                      color:
+                      isDark ? AppColors.darkTextDark : AppColors.textDark,
                       height: 1.2,
                       letterSpacing: -0.5,
                     ),
@@ -658,8 +675,8 @@ class _HomeTabState extends State<_HomeTab> {
                               boxShadow: isSelected
                                   ? [
                                 BoxShadow(
-                                  color: AppColors.primary
-                                      .withOpacity(0.3),
+                                  color:
+                                  AppColors.primary.withOpacity(0.3),
                                   blurRadius: 8,
                                   offset: const Offset(0, 4),
                                 )
@@ -710,16 +727,20 @@ class _HomeTabState extends State<_HomeTab> {
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
                 children: [
-                  _buildDietChip('all',
-                      s.isEnglish ? '🍽️ All' : '🍽️ Hepsi', isDark),
-                  _buildDietChip('vegetarian',
-                      s.isEnglish ? '🥦 Vegetarian' : '🥦 Vejetaryen', isDark),
+                  _buildDietChip(
+                      'all', s.isEnglish ? '🍽️ All' : '🍽️ Hepsi', isDark),
+                  _buildDietChip(
+                      'vegetarian',
+                      s.isEnglish ? '🥦 Vegetarian' : '🥦 Vejetaryen',
+                      isDark),
                   _buildDietChip('vegan', '🌱 Vegan', isDark),
                   _buildDietChip('diet',
                       s.isEnglish ? '🥗 Diet' : '🥗 Diyet', isDark),
                   _buildDietChip('protein', '💪 Protein', isDark),
-                  _buildDietChip('carb',
-                      s.isEnglish ? '🍞 Carbs' : '🍞 Karbonhidrat', isDark),
+                  _buildDietChip(
+                      'carb',
+                      s.isEnglish ? '🍞 Carbs' : '🍞 Karbonhidrat',
+                      isDark),
                 ],
               ),
             ),
@@ -737,9 +758,8 @@ class _HomeTabState extends State<_HomeTab> {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: isDark
-                          ? AppColors.darkTextDark
-                          : AppColors.textDark,
+                      color:
+                      isDark ? AppColors.darkTextDark : AppColors.textDark,
                     ),
                   ),
                   const Icon(Icons.star_rounded,
@@ -754,7 +774,9 @@ class _HomeTabState extends State<_HomeTab> {
             child: SizedBox(
               height: 220,
               child: StreamBuilder<List<RecipeModel>>(
-                stream: _recipeService.getTopRatedRecipes(),
+                stream: _selectedCategory == 'all'
+                    ? _recipeService.getTopRatedRecipes()
+                    : _recipeService.getTopRatedByCategory(_selectedCategory),
                 builder: (context, snapshot) {
                   if (!snapshot.hasData || snapshot.data!.isEmpty) {
                     return Center(
@@ -762,7 +784,8 @@ class _HomeTabState extends State<_HomeTab> {
                         s.isEnglish
                             ? 'No rated recipes yet'
                             : 'Henüz değerlendirilmiş tarif yok',
-                        style: const TextStyle(color: AppColors.textGrey),
+                        style:
+                        const TextStyle(color: AppColors.textGrey),
                       ),
                     );
                   }
@@ -842,16 +865,23 @@ class _HomeTabState extends State<_HomeTab> {
                                             size: 13),
                                         const SizedBox(width: 4),
                                         Text(
-                                          recipe.averageRating
-                                              .toStringAsFixed(1),
+                                          recipe.averageRating.toStringAsFixed(1),
                                           style: TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w600,
-                                            color: isDark
-                                                ? AppColors.darkTextGrey
-                                                : AppColors.textGrey,
+                                            color: isDark ? AppColors.darkTextGrey : AppColors.textGrey,
                                           ),
                                         ),
+                                        if (recipe.ratingCount > 0) ...[
+                                          const SizedBox(width: 2),
+                                          Text(
+                                            '(${recipe.ratingCount})',
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              color: isDark ? AppColors.darkTextGrey : AppColors.textGrey,
+                                            ),
+                                          ),
+                                        ],
                                         const SizedBox(width: 8),
                                         Icon(Icons.access_time_outlined,
                                             size: 12,
@@ -896,9 +926,8 @@ class _HomeTabState extends State<_HomeTab> {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: isDark
-                          ? AppColors.darkTextDark
-                          : AppColors.textDark,
+                      color:
+                      isDark ? AppColors.darkTextDark : AppColors.textDark,
                     ),
                   ),
                   Text(
@@ -995,8 +1024,7 @@ class _HomeTabState extends State<_HomeTab> {
         onTap: () => setState(() => _selectedDietTag = key),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          padding:
-          const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           decoration: BoxDecoration(
             color: isSelected
                 ? AppColors.primary.withOpacity(0.12)
@@ -1013,11 +1041,8 @@ class _HomeTabState extends State<_HomeTab> {
             style: TextStyle(
               color: isSelected
                   ? AppColors.primary
-                  : (isDark
-                  ? AppColors.darkTextGrey
-                  : AppColors.textGrey),
-              fontWeight:
-              isSelected ? FontWeight.bold : FontWeight.normal,
+                  : (isDark ? AppColors.darkTextGrey : AppColors.textGrey),
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               fontSize: 12,
             ),
           ),

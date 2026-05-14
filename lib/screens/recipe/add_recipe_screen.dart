@@ -72,7 +72,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(
-        source: ImageSource.gallery, maxWidth: 800, imageQuality: 80);
+        source: ImageSource.gallery, maxWidth: 1920, imageQuality: 100);
     if (picked != null) {
       if (kIsWeb) {
         final bytes = await picked.readAsBytes();

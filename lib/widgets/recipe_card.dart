@@ -103,6 +103,16 @@ class RecipeCard extends StatelessWidget {
                                 : AppColors.textDark,
                           ),
                         ),
+                        if (recipe.ratingCount > 0) ...[
+                          const SizedBox(width: 2),
+                          Text(
+                            '(${recipe.ratingCount})',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: isDark ? AppColors.darkTextGrey : AppColors.textGrey,
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   ),
