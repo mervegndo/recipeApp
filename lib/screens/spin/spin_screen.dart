@@ -424,7 +424,7 @@ class _WheelPainter extends CustomPainter {
       canvas.restore();
     }
 
-    // Dış çerçeve
+    //Dış çerçeve
     final borderPaint = Paint()
       ..color = Colors.white.withOpacity(0.5)
       ..strokeWidth = 3
