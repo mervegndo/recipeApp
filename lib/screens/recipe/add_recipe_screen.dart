@@ -10,7 +10,6 @@ import '../../services/recipe_service.dart';
 import '../../services/imgbb_service.dart';
 import '../../utils/app_constants.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:translator/translator.dart';
 
 class AddRecipeScreen extends StatefulWidget {
   final AppStrings strings;
@@ -28,7 +27,6 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
   final _ingredientController = TextEditingController();
   final _amountController = TextEditingController();
   String _selectedUnit = 'cup';
-  final translator = GoogleTranslator();
 
   final List<Map<String, String>> _unitOptions = [
     {'key': 'tsp', 'en': 'tsp', 'tr': 'çay kaşığı'},
@@ -87,12 +85,6 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
 
   Future<void> _addIngredient() async {
     final ingredientName = _ingredientController.text.trim();
-    final translation = await translator.translate(
-      ingredientName,
-      to: 'en',
-    );
-
-    final englishIngredient = translation.text.toLowerCase();
 
     if (ingredientName.isEmpty) return;
     final amount = _amountController.text.trim();
@@ -118,15 +110,14 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
       FirebaseFirestore.instance.collection('ingredients');
 
       final existing = await ingredientRef
-          .where('searchName',
-          isEqualTo: englishIngredient)
+          .where('searchName', isEqualTo: ingredientName.toLowerCase())
           .limit(1)
           .get();
 
       if (existing.docs.isEmpty) {
         await ingredientRef.add({
-          'name': englishIngredient,
-          'searchName': englishIngredient,
+          'name': ingredientName,
+          'searchName': ingredientName.toLowerCase(),
           'createdAt': FieldValue.serverTimestamp(),
         });
       }
@@ -239,13 +230,13 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
             onPressed: _isLoading ? null : _saveRecipe,
             child: _isLoading
                 ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2))
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(strokeWidth: 2))
                 : Text(s.save,
-                    style: const TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.bold)),
+                style: const TextStyle(
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -275,8 +266,8 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
               decoration: InputDecoration(labelText: s.recipeName),
               validator: (v) => v == null || v.isEmpty
                   ? (s.isEnglish
-                      ? 'Recipe name cannot be empty'
-                      : 'Tarif adı boş olamaz')
+                  ? 'Recipe name cannot be empty'
+                  : 'Tarif adı boş olamaz')
                   : null,
             ),
             const SizedBox(height: 16),
@@ -288,8 +279,8 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
               decoration: InputDecoration(labelText: s.description),
               validator: (v) => v == null || v.isEmpty
                   ? (s.isEnglish
-                      ? 'Description cannot be empty'
-                      : 'Açıklama boş olamaz')
+                  ? 'Description cannot be empty'
+                  : 'Açıklama boş olamaz')
                   : null,
             ),
             const SizedBox(height: 16),
@@ -300,10 +291,10 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
               decoration: InputDecoration(labelText: s.category),
               items: AppCategories.categories
                   .map((c) => DropdownMenuItem(
-                        value: c['key'],
-                        child: Text(
-                            '${c['emoji']} ${s.isEnglish ? c['labelEn']! : c['label']!}'),
-                      ))
+                value: c['key'],
+                child: Text(
+                    '${c['emoji']} ${s.isEnglish ? c['labelEn']! : c['label']!}'),
+              ))
                   .toList(),
               onChanged: (v) =>
                   setState(() => _selectedCategory = v ?? 'breakfast'),
@@ -319,7 +310,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
                       labelText:
-                          s.isEnglish ? 'Duration (min)' : 'Süre (dk)',
+                      s.isEnglish ? 'Duration (min)' : 'Süre (dk)',
                       prefixIcon: const Icon(Icons.access_time_outlined),
                     ),
                   ),
@@ -365,7 +356,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
                     ? 'Calories (optional)'
                     : 'Kalori (isteğe bağlı)',
                 prefixIcon:
-                    const Icon(Icons.local_fire_department_outlined),
+                const Icon(Icons.local_fire_department_outlined),
               ),
             ),
             const SizedBox(height: 20),
@@ -414,28 +405,27 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
             // Malzemeler
             _buildSectionTitle(s.ingredients, _ingredients.length),
             ..._ingredients.asMap().entries.map((e) => ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: CircleAvatar(
-                    radius: 14,
-                    backgroundColor: AppColors.primary.withOpacity(0.1),
-                    child: Text('${e.key + 1}',
-                        style: const TextStyle(
-                            fontSize: 12, color: AppColors.primary)),
-                  ),
-                  title: Text(e.value),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline,
-                        color: Colors.red),
-                    onPressed: () =>
-                        setState(() => _ingredients.removeAt(e.key)),
-                  ),
-                )),
+              contentPadding: EdgeInsets.zero,
+              leading: CircleAvatar(
+                radius: 14,
+                backgroundColor: AppColors.primary.withOpacity(0.1),
+                child: Text('${e.key + 1}',
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.primary)),
+              ),
+              title: Text(e.value),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete_outline,
+                    color: Colors.red),
+                onPressed: () =>
+                    setState(() => _ingredients.removeAt(e.key)),
+              ),
+            )),
             Column(
               children: [
                 Row(
                   children: [
-                    SizedBox(
-                      width: 90,
+                    Expanded(
                       child: TextFormField(
                         controller: _amountController,
                         keyboardType: TextInputType.number,
@@ -446,10 +436,9 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
                       ),
                     ),
 
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 12),
 
-                    SizedBox(
-                      width: 100,
+                    Expanded(
                       child: DropdownButtonFormField<String>(
                         value: _selectedUnit,
                         decoration: InputDecoration(
@@ -458,7 +447,9 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
                         items: _unitOptions.map((unit) {
                           return DropdownMenuItem<String>(
                             value: unit['key'],
-                            child: Text(s.isEnglish ? unit['en']! : unit['tr']!),
+                            child: Text(
+                              s.isEnglish ? unit['en']! : unit['tr']!,
+                            ),
                           );
                         }).toList(),
                         onChanged: (value) {
@@ -468,72 +459,69 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
                         },
                       ),
                     ),
-
-                    const SizedBox(width: 8),
-
-                    Expanded(
-                      child: RawAutocomplete<String>(
-                        textEditingController: _ingredientController,
-                        focusNode: _ingredientFocusNode,
-                        optionsBuilder: (TextEditingValue textEditingValue) async {
-                          final query = textEditingValue.text.trim().toLowerCase();
-
-                          if (query.isEmpty) {
-                            return const Iterable<String>.empty();
-                          }
-
-                          final snapshot = await FirebaseFirestore.instance
-                              .collection('ingredients')
-                              .where('searchName', isGreaterThanOrEqualTo: query)
-                              .where('searchName', isLessThanOrEqualTo: '$query\uf8ff')
-                              .limit(10)
-                              .get();
-
-                          return snapshot.docs
-                              .map((doc) => doc['name'].toString())
-                              .toList();
-                        },
-                        fieldViewBuilder:
-                            (context, controller, focusNode, onFieldSubmitted) {
-                          return TextFormField(
-                            controller: controller,
-                            focusNode: focusNode,
-                            decoration: InputDecoration(
-                              hintText: s.addIngredient,
-                            ),
-                            onFieldSubmitted: (_) => _addIngredient(),
-                          );
-                        },
-                        optionsViewBuilder: (context, onSelected, options) {
-                          return Align(
-                            alignment: Alignment.topLeft,
-                            child: Material(
-                              elevation: 4,
-                              borderRadius: BorderRadius.circular(12),
-                              child: SizedBox(
-                                width: 250,
-                                child: ListView.builder(
-                                  padding: EdgeInsets.zero,
-                                  shrinkWrap: true,
-                                  itemCount: options.length,
-                                  itemBuilder: (context, index) {
-                                    final option = options.elementAt(index);
-
-                                    return ListTile(
-                                      title: Text(option),
-                                      onTap: () {
-                                        onSelected(option);
-                                      },
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
                   ],
+                ),
+
+                const SizedBox(height: 12),
+
+                RawAutocomplete<String>(
+                  textEditingController: _ingredientController,
+                  focusNode: _ingredientFocusNode,
+                  optionsBuilder: (TextEditingValue textEditingValue) async {
+                    final query = textEditingValue.text.trim().toLowerCase();
+
+                    if (query.isEmpty) {
+                      return const Iterable<String>.empty();
+                    }
+
+                    final snapshot = await FirebaseFirestore.instance
+                        .collection('ingredients')
+                        .where('searchName', isGreaterThanOrEqualTo: query)
+                        .where('searchName', isLessThanOrEqualTo: '$query\uf8ff')
+                        .limit(10)
+                        .get();
+
+                    return snapshot.docs
+                        .map((doc) => doc['name'].toString())
+                        .toList();
+                  },
+                  fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                    return TextFormField(
+                      controller: controller,
+                      focusNode: focusNode,
+                      decoration: InputDecoration(
+                        hintText: s.addIngredient,
+                      ),
+                      onFieldSubmitted: (_) => _addIngredient(),
+                    );
+                  },
+                  optionsViewBuilder: (context, onSelected, options) {
+                    return Align(
+                      alignment: Alignment.topLeft,
+                      child: Material(
+                        elevation: 4,
+                        borderRadius: BorderRadius.circular(12),
+                        child: SizedBox(
+                          width: 250,
+                          child: ListView.builder(
+                            padding: EdgeInsets.zero,
+                            shrinkWrap: true,
+                            itemCount: options.length,
+                            itemBuilder: (context, index) {
+                              final option = options.elementAt(index);
+
+                              return ListTile(
+                                title: Text(option),
+                                onTap: () {
+                                  onSelected(option);
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
 
                 const SizedBox(height: 8),
@@ -552,22 +540,22 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
             // Yapılış adımları
             _buildSectionTitle(s.steps, _steps.length),
             ..._steps.asMap().entries.map((e) => ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: CircleAvatar(
-                    radius: 14,
-                    backgroundColor: AppColors.secondary.withOpacity(0.15),
-                    child: Text('${e.key + 1}',
-                        style: const TextStyle(
-                            fontSize: 12, color: AppColors.secondary)),
-                  ),
-                  title: Text(e.value),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline,
-                        color: Colors.red),
-                    onPressed: () =>
-                        setState(() => _steps.removeAt(e.key)),
-                  ),
-                )),
+              contentPadding: EdgeInsets.zero,
+              leading: CircleAvatar(
+                radius: 14,
+                backgroundColor: AppColors.secondary.withOpacity(0.15),
+                child: Text('${e.key + 1}',
+                    style: const TextStyle(
+                        fontSize: 12, color: AppColors.secondary)),
+              ),
+              title: Text(e.value),
+              trailing: IconButton(
+                icon: const Icon(Icons.delete_outline,
+                    color: Colors.red),
+                onPressed: () =>
+                    setState(() => _steps.removeAt(e.key)),
+              ),
+            )),
             Row(
               children: [
                 Expanded(
@@ -624,7 +612,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
           const SizedBox(width: 8),
           Container(
             padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
               color: AppColors.primary.withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),
