@@ -1,11 +1,13 @@
 // lib/screens/recipe/add_recipe_screen.dart
 
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../models/recipe_model.dart';
 import '../../services/recipe_service.dart';
+import '../../services/imgbb_service.dart';
 import '../../utils/app_constants.dart';
 
 class AddRecipeScreen extends StatefulWidget {
@@ -34,6 +36,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
   final List<String> _steps = [];
   final List<String> _selectedDietTags = [];
   File? _imageFile;
+  Uint8List? _imageBytes;
   bool _isLoading = false;
 
   @override
@@ -52,7 +55,14 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
     final picker = ImagePicker();
     final picked = await picker.pickImage(
         source: ImageSource.gallery, maxWidth: 800, imageQuality: 80);
-    if (picked != null) setState(() => _imageFile = File(picked.path));
+    if (picked != null) {
+      if (kIsWeb) {
+        final bytes = await picked.readAsBytes();
+        setState(() => _imageBytes = bytes);
+      } else {
+        setState(() => _imageFile = File(picked.path));
+      }
+    }
   }
 
   void _addIngredient() {
@@ -104,6 +114,15 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
 
     try {
       final user = FirebaseAuth.instance.currentUser!;
+
+      // ImgBB'ye fotoğraf yükle
+      String? imageUrl;
+      if (kIsWeb && _imageBytes != null) {
+        imageUrl = await ImgBBService.uploadImageBytes(_imageBytes!);
+      } else if (_imageFile != null) {
+        imageUrl = await ImgBBService.uploadImage(_imageFile!);
+      }
+
       final recipe = RecipeModel(
         id: _recipeService.generateId(),
         userId: user.uid,
@@ -121,9 +140,10 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
             ? int.tryParse(_caloriesController.text)
             : null,
         dietTags: _selectedDietTags,
+        imageUrl: imageUrl,
       );
 
-      await _recipeService.addRecipe(recipe, imageFile: _imageFile);
+      await _recipeService.addRecipe(recipe);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -135,7 +155,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
         Navigator.pop(context);
       }
     } catch (e) {
-      _showError('Hata: $e');
+      _showError('Error: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -159,13 +179,13 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
             onPressed: _isLoading ? null : _saveRecipe,
             child: _isLoading
                 ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2))
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2))
                 : Text(s.save,
-                style: const TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.bold)),
+                    style: const TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold)),
           ),
         ],
       ),
@@ -184,21 +204,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: const Color(0xFFE0E0E0)),
                 ),
-                child: _imageFile != null
-                    ? ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Image.file(_imageFile!, fit: BoxFit.cover))
-                    : Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.add_photo_alternate_outlined,
-                        size: 48, color: AppColors.textGrey),
-                    const SizedBox(height: 8),
-                    Text(s.addPhoto,
-                        style: const TextStyle(
-                            color: AppColors.textGrey)),
-                  ],
-                ),
+                child: _buildImagePreview(),
               ),
             ),
             const SizedBox(height: 20),
@@ -209,8 +215,8 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
               decoration: InputDecoration(labelText: s.recipeName),
               validator: (v) => v == null || v.isEmpty
                   ? (s.isEnglish
-                  ? 'Recipe name cannot be empty'
-                  : 'Tarif adı boş olamaz')
+                      ? 'Recipe name cannot be empty'
+                      : 'Tarif adı boş olamaz')
                   : null,
             ),
             const SizedBox(height: 16),
@@ -222,8 +228,8 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
               decoration: InputDecoration(labelText: s.description),
               validator: (v) => v == null || v.isEmpty
                   ? (s.isEnglish
-                  ? 'Description cannot be empty'
-                  : 'Açıklama boş olamaz')
+                      ? 'Description cannot be empty'
+                      : 'Açıklama boş olamaz')
                   : null,
             ),
             const SizedBox(height: 16),
@@ -234,10 +240,10 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
               decoration: InputDecoration(labelText: s.category),
               items: AppCategories.categories
                   .map((c) => DropdownMenuItem(
-                value: c['key'],
-                child: Text(
-                    '${c['emoji']} ${s.isEnglish ? c['labelEn']! : c['label']!}'),
-              ))
+                        value: c['key'],
+                        child: Text(
+                            '${c['emoji']} ${s.isEnglish ? c['labelEn']! : c['label']!}'),
+                      ))
                   .toList(),
               onChanged: (v) =>
                   setState(() => _selectedCategory = v ?? 'breakfast'),
@@ -252,7 +258,8 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
                     controller: _cookingTimeController,
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
-                      labelText: s.isEnglish ? 'Duration (min)' : 'Süre (dk)',
+                      labelText:
+                          s.isEnglish ? 'Duration (min)' : 'Süre (dk)',
                       prefixIcon: const Icon(Icons.access_time_outlined),
                     ),
                   ),
@@ -298,7 +305,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
                     ? 'Calories (optional)'
                     : 'Kalori (isteğe bağlı)',
                 prefixIcon:
-                const Icon(Icons.local_fire_department_outlined),
+                    const Icon(Icons.local_fire_department_outlined),
               ),
             ),
             const SizedBox(height: 20),
@@ -312,11 +319,20 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
               spacing: 8,
               runSpacing: 4,
               children: [
-                {'key': 'vegetarian', 'label': s.isEnglish ? '🥦 Vegetarian' : '🥦 Vejetaryen'},
+                {
+                  'key': 'vegetarian',
+                  'label': s.isEnglish ? '🥦 Vegetarian' : '🥦 Vejetaryen'
+                },
                 {'key': 'vegan', 'label': '🌱 Vegan'},
-                {'key': 'diet', 'label': s.isEnglish ? '🥗 Diet' : '🥗 Diyet'},
+                {
+                  'key': 'diet',
+                  'label': s.isEnglish ? '🥗 Diet' : '🥗 Diyet'
+                },
                 {'key': 'protein', 'label': '💪 Protein'},
-                {'key': 'carb', 'label': s.isEnglish ? '🍞 Carbs' : '🍞 Karbonhidrat'},
+                {
+                  'key': 'carb',
+                  'label': s.isEnglish ? '🍞 Carbs' : '🍞 Karbonhidrat'
+                },
               ].map((opt) {
                 final isSelected = _selectedDietTags.contains(opt['key']);
                 return FilterChip(
@@ -338,27 +354,29 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
             // Malzemeler
             _buildSectionTitle(s.ingredients, _ingredients.length),
             ..._ingredients.asMap().entries.map((e) => ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: CircleAvatar(
-                radius: 14,
-                backgroundColor: AppColors.primary.withOpacity(0.1),
-                child: Text('${e.key + 1}',
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.primary)),
-              ),
-              title: Text(e.value),
-              trailing: IconButton(
-                icon: const Icon(Icons.delete_outline, color: Colors.red),
-                onPressed: () =>
-                    setState(() => _ingredients.removeAt(e.key)),
-              ),
-            )),
+                  contentPadding: EdgeInsets.zero,
+                  leading: CircleAvatar(
+                    radius: 14,
+                    backgroundColor: AppColors.primary.withOpacity(0.1),
+                    child: Text('${e.key + 1}',
+                        style: const TextStyle(
+                            fontSize: 12, color: AppColors.primary)),
+                  ),
+                  title: Text(e.value),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline,
+                        color: Colors.red),
+                    onPressed: () =>
+                        setState(() => _ingredients.removeAt(e.key)),
+                  ),
+                )),
             Row(
               children: [
                 Expanded(
                   child: TextFormField(
                     controller: _ingredientController,
-                    decoration: InputDecoration(hintText: s.addIngredient),
+                    decoration:
+                        InputDecoration(hintText: s.addIngredient),
                     onFieldSubmitted: (_) => _addIngredient(),
                   ),
                 ),
@@ -372,21 +390,22 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
             // Yapılış adımları
             _buildSectionTitle(s.steps, _steps.length),
             ..._steps.asMap().entries.map((e) => ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: CircleAvatar(
-                radius: 14,
-                backgroundColor: AppColors.secondary.withOpacity(0.15),
-                child: Text('${e.key + 1}',
-                    style: const TextStyle(
-                        fontSize: 12, color: AppColors.secondary)),
-              ),
-              title: Text(e.value),
-              trailing: IconButton(
-                icon: const Icon(Icons.delete_outline, color: Colors.red),
-                onPressed: () =>
-                    setState(() => _steps.removeAt(e.key)),
-              ),
-            )),
+                  contentPadding: EdgeInsets.zero,
+                  leading: CircleAvatar(
+                    radius: 14,
+                    backgroundColor: AppColors.secondary.withOpacity(0.15),
+                    child: Text('${e.key + 1}',
+                        style: const TextStyle(
+                            fontSize: 12, color: AppColors.secondary)),
+                  ),
+                  title: Text(e.value),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline,
+                        color: Colors.red),
+                    onPressed: () =>
+                        setState(() => _steps.removeAt(e.key)),
+                  ),
+                )),
             Row(
               children: [
                 Expanded(
@@ -408,6 +427,30 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
     );
   }
 
+  Widget _buildImagePreview() {
+    if (kIsWeb && _imageBytes != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Image.memory(_imageBytes!, fit: BoxFit.cover),
+      );
+    } else if (_imageFile != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Image.file(_imageFile!, fit: BoxFit.cover),
+      );
+    }
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.add_photo_alternate_outlined,
+            size: 48, color: AppColors.textGrey),
+        const SizedBox(height: 8),
+        Text(widget.strings.addPhoto,
+            style: const TextStyle(color: AppColors.textGrey)),
+      ],
+    );
+  }
+
   Widget _buildSectionTitle(String title, int count) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -418,7 +461,8 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
                   fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(width: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
               color: AppColors.primary.withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),
