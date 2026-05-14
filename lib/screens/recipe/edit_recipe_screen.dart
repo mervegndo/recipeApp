@@ -1,40 +1,67 @@
-// lib/screens/recipe/add_recipe_screen.dart
+// lib/screens/recipe/edit_recipe_screen.dart
 
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/recipe_model.dart';
 import '../../services/recipe_service.dart';
 import '../../utils/app_constants.dart';
 
-class AddRecipeScreen extends StatefulWidget {
+class EditRecipeScreen extends StatefulWidget {
+  final RecipeModel recipe;
   final AppStrings strings;
-  const AddRecipeScreen({super.key, required this.strings});
+
+  const EditRecipeScreen({
+    super.key,
+    required this.recipe,
+    required this.strings,
+  });
 
   @override
-  State<AddRecipeScreen> createState() => _AddRecipeScreenState();
+  State<EditRecipeScreen> createState() => _EditRecipeScreenState();
 }
 
-class _AddRecipeScreenState extends State<AddRecipeScreen> {
+class _EditRecipeScreenState extends State<EditRecipeScreen> {
   final _formKey = GlobalKey<FormState>();
   final _recipeService = RecipeService();
 
-  final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  final _ingredientController = TextEditingController();
-  final _stepController = TextEditingController();
-  final _cookingTimeController = TextEditingController();
-  final _servingsController = TextEditingController();
-  final _caloriesController = TextEditingController();
+  late TextEditingController _titleController;
+  late TextEditingController _descriptionController;
+  late TextEditingController _ingredientController;
+  late TextEditingController _stepController;
+  late TextEditingController _cookingTimeController;
+  late TextEditingController _servingsController;
+  late TextEditingController _caloriesController;
 
-  String _selectedCategory = 'breakfast';
-  String _selectedDifficulty = 'medium';
-  final List<String> _ingredients = [];
-  final List<String> _steps = [];
-  final List<String> _selectedDietTags = [];
-  File? _imageFile;
+  late String _selectedCategory;
+  late String _selectedDifficulty;
+  late List<String> _ingredients;
+  late List<String> _steps;
+  late List<String> _selectedDietTags;
+  File? _newImageFile;
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final r = widget.recipe;
+    _titleController = TextEditingController(text: r.title);
+    _descriptionController = TextEditingController(text: r.description);
+    _ingredientController = TextEditingController();
+    _stepController = TextEditingController();
+    _cookingTimeController =
+        TextEditingController(text: r.cookingTimeMinutes.toString());
+    _servingsController =
+        TextEditingController(text: r.servings.toString());
+    _caloriesController =
+        TextEditingController(text: r.calories?.toString() ?? '');
+    _selectedCategory = r.category;
+    _selectedDifficulty = r.difficulty;
+    _ingredients = List.from(r.ingredients);
+    _steps = List.from(r.steps);
+    _selectedDietTags = List.from(r.dietTags);
+  }
 
   @override
   void dispose() {
@@ -52,7 +79,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
     final picker = ImagePicker();
     final picked = await picker.pickImage(
         source: ImageSource.gallery, maxWidth: 800, imageQuality: 80);
-    if (picked != null) setState(() => _imageFile = File(picked.path));
+    if (picked != null) setState(() => _newImageFile = File(picked.path));
   }
 
   void _addIngredient() {
@@ -85,7 +112,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
     });
   }
 
-  Future<void> _saveRecipe() async {
+  Future<void> _saveChanges() async {
     if (!_formKey.currentState!.validate()) return;
     if (_ingredients.isEmpty) {
       _showError(widget.strings.isEnglish
@@ -103,17 +130,17 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final user = FirebaseAuth.instance.currentUser!;
-      final recipe = RecipeModel(
-        id: _recipeService.generateId(),
-        userId: user.uid,
-        userEmail: user.email ?? '',
+      final updatedRecipe = RecipeModel(
+        id: widget.recipe.id,
+        userId: widget.recipe.userId,
+        userEmail: widget.recipe.userEmail,
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
         ingredients: _ingredients,
         steps: _steps,
         category: _selectedCategory,
-        createdAt: DateTime.now(),
+        imageUrl: widget.recipe.imageUrl,
+        createdAt: widget.recipe.createdAt,
         cookingTimeMinutes: int.tryParse(_cookingTimeController.text) ?? 0,
         servings: int.tryParse(_servingsController.text) ?? 1,
         difficulty: _selectedDifficulty,
@@ -121,14 +148,20 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
             ? int.tryParse(_caloriesController.text)
             : null,
         dietTags: _selectedDietTags,
+        favoriteCount: widget.recipe.favoriteCount,
+        averageRating: widget.recipe.averageRating,
+        ratingCount: widget.recipe.ratingCount,
       );
 
-      await _recipeService.addRecipe(recipe, imageFile: _imageFile);
+      await _recipeService.updateRecipe(
+        updatedRecipe,
+        newImageFile: _newImageFile,
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(widget.strings.recipeAdded),
+            content: Text(widget.strings.recipeUpdated),
             backgroundColor: Colors.green,
           ),
         );
@@ -153,10 +186,10 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(s.addRecipe),
+        title: Text(s.isEnglish ? 'Edit Recipe' : 'Tarifi Düzenle'),
         actions: [
           TextButton(
-            onPressed: _isLoading ? null : _saveRecipe,
+            onPressed: _isLoading ? null : _saveChanges,
             child: _isLoading
                 ? const SizedBox(
                 width: 20,
@@ -184,17 +217,23 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: const Color(0xFFE0E0E0)),
                 ),
-                child: _imageFile != null
+                child: _newImageFile != null
                     ? ClipRRect(
                     borderRadius: BorderRadius.circular(16),
-                    child: Image.file(_imageFile!, fit: BoxFit.cover))
+                    child: Image.file(_newImageFile!, fit: BoxFit.cover))
+                    : widget.recipe.imageUrl != null
+                    ? ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: CachedNetworkImage(
+                        imageUrl: widget.recipe.imageUrl!,
+                        fit: BoxFit.cover))
                     : Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     const Icon(Icons.add_photo_alternate_outlined,
                         size: 48, color: AppColors.textGrey),
                     const SizedBox(height: 8),
-                    Text(s.addPhoto,
+                    Text(s.changePhoto,
                         style: const TextStyle(
                             color: AppColors.textGrey)),
                   ],
@@ -252,8 +291,10 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
                     controller: _cookingTimeController,
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
-                      labelText: s.isEnglish ? 'Duration (min)' : 'Süre (dk)',
-                      prefixIcon: const Icon(Icons.access_time_outlined),
+                      labelText:
+                      s.isEnglish ? 'Duration (min)' : 'Süre (dk)',
+                      prefixIcon:
+                      const Icon(Icons.access_time_outlined),
                     ),
                   ),
                 ),
@@ -348,7 +389,8 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
               ),
               title: Text(e.value),
               trailing: IconButton(
-                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                icon: const Icon(Icons.delete_outline,
+                    color: Colors.red),
                 onPressed: () =>
                     setState(() => _ingredients.removeAt(e.key)),
               ),
@@ -358,7 +400,8 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
                 Expanded(
                   child: TextFormField(
                     controller: _ingredientController,
-                    decoration: InputDecoration(hintText: s.addIngredient),
+                    decoration:
+                    InputDecoration(hintText: s.addIngredient),
                     onFieldSubmitted: (_) => _addIngredient(),
                   ),
                 ),
@@ -375,14 +418,16 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
               contentPadding: EdgeInsets.zero,
               leading: CircleAvatar(
                 radius: 14,
-                backgroundColor: AppColors.secondary.withOpacity(0.15),
+                backgroundColor:
+                AppColors.secondary.withOpacity(0.15),
                 child: Text('${e.key + 1}',
                     style: const TextStyle(
                         fontSize: 12, color: AppColors.secondary)),
               ),
               title: Text(e.value),
               trailing: IconButton(
-                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                icon: const Icon(Icons.delete_outline,
+                    color: Colors.red),
                 onPressed: () =>
                     setState(() => _steps.removeAt(e.key)),
               ),
@@ -418,7 +463,8 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
                   fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(width: 8),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            padding:
+            const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
               color: AppColors.primary.withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),

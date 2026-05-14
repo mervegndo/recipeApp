@@ -8,9 +8,19 @@ class RecipeModel {
   final String description;
   final List<String> ingredients;
   final List<String> steps;
-  final String category; // breakfast, lunch, dinner, dessert, snack
+  final String category;
   final String? imageUrl;
   final DateTime createdAt;
+
+  // Yeni alanlar
+  final int cookingTimeMinutes;
+  final int servings;
+  final String difficulty; // 'easy', 'medium', 'hard'
+  final int? calories;
+  final List<String> dietTags; // 'vegetarian', 'vegan', 'diet', 'protein', 'carb'
+  final int favoriteCount;
+  final double averageRating;
+  final int ratingCount;
 
   RecipeModel({
     required this.id,
@@ -23,9 +33,16 @@ class RecipeModel {
     required this.category,
     this.imageUrl,
     required this.createdAt,
+    this.cookingTimeMinutes = 0,
+    this.servings = 1,
+    this.difficulty = 'medium',
+    this.calories,
+    this.dietTags = const [],
+    this.favoriteCount = 0,
+    this.averageRating = 0.0,
+    this.ratingCount = 0,
   });
 
-  // Firestore'dan okuma
   factory RecipeModel.fromMap(Map<String, dynamic> map, String id) {
     return RecipeModel(
       id: id,
@@ -40,10 +57,17 @@ class RecipeModel {
       createdAt: map['createdAt'] != null
           ? (map['createdAt'] as dynamic).toDate()
           : DateTime.now(),
+      cookingTimeMinutes: map['cookingTimeMinutes'] ?? 0,
+      servings: map['servings'] ?? 1,
+      difficulty: map['difficulty'] ?? 'medium',
+      calories: map['calories'],
+      dietTags: List<String>.from(map['dietTags'] ?? []),
+      favoriteCount: map['favoriteCount'] ?? 0,
+      averageRating: (map['averageRating'] ?? 0.0).toDouble(),
+      ratingCount: map['ratingCount'] ?? 0,
     );
   }
 
-  // Firestore'a yazma
   Map<String, dynamic> toMap() {
     return {
       'userId': userId,
@@ -55,6 +79,14 @@ class RecipeModel {
       'category': category,
       'imageUrl': imageUrl,
       'createdAt': createdAt,
+      'cookingTimeMinutes': cookingTimeMinutes,
+      'servings': servings,
+      'difficulty': difficulty,
+      'calories': calories,
+      'dietTags': dietTags,
+      'favoriteCount': favoriteCount,
+      'averageRating': averageRating,
+      'ratingCount': ratingCount,
     };
   }
 }

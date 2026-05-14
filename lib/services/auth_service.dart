@@ -8,7 +8,6 @@ class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  // Mevcut kullanıcıyı dinle
   Stream<User?> get authStateChanges => _auth.authStateChanges();
 
   // Kayıt ol
@@ -23,13 +22,14 @@ class AuthService {
         password: password,
       );
 
+      await credential.user!.updateDisplayName(displayName);
+
       final user = UserModel(
         uid: credential.user!.uid,
         email: email,
         displayName: displayName,
       );
 
-      // Firestore'a kullanıcıyı kaydet
       await _firestore
           .collection('users')
           .doc(credential.user!.uid)
@@ -71,7 +71,23 @@ class AuthService {
     await _auth.signOut();
   }
 
-  // Hata mesajlarını Türkçeye çevir
+  // Şifremi unuttum
+  Future<void> resetPassword(String email) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+    } on FirebaseAuthException catch (e) {
+      throw _handleAuthError(e.code);
+    }
+  }
+
+  // Admin kontrolü
+  Future<bool> isAdmin() async {
+    final user = _auth.currentUser;
+    if (user == null) return false;
+    final doc = await _firestore.collection('users').doc(user.uid).get();
+    return doc.data()?['role'] == 'admin';
+  }
+
   String _handleAuthError(String code) {
     switch (code) {
       case 'email-already-in-use':
@@ -84,6 +100,8 @@ class AuthService {
         return 'Kullanıcı bulunamadı.';
       case 'wrong-password':
         return 'Hatalı şifre.';
+      case 'too-many-requests':
+        return 'Çok fazla deneme. Lütfen bekleyin.';
       default:
         return 'Bir hata oluştu. Lütfen tekrar deneyin.';
     }

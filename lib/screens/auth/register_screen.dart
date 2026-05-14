@@ -5,7 +5,9 @@ import '../../services/auth_service.dart';
 import '../../utils/app_constants.dart';
 
 class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key});
+  final AppStrings strings;
+
+  const RegisterScreen({super.key, required this.strings});
 
   @override
   State<RegisterScreen> createState() => _RegisterScreenState();
@@ -33,9 +35,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   Future<void> _register() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isLoading = true);
-
     try {
       await _authService.register(
         email: _emailController.text.trim(),
@@ -46,7 +46,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: AppColors.error),
+          SnackBar(
+              content: Text(e.toString()),
+              backgroundColor: AppColors.error),
         );
       }
     } finally {
@@ -56,8 +58,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final s = widget.strings;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Kayıt Ol')),
+      appBar: AppBar(title: Text(s.register)),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -66,23 +71,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Hesap Oluştur',
-                    style: TextStyle(
-                        fontSize: 22, fontWeight: FontWeight.bold)),
+                Text(
+                  s.isEnglish ? 'Create Account' : 'Hesap Oluştur',
+                  style: const TextStyle(
+                      fontSize: 22, fontWeight: FontWeight.bold),
+                ),
                 const SizedBox(height: 8),
-                const Text('Topluluğa katıl ve tariflerini paylaş',
-                    style: TextStyle(color: AppColors.textGrey)),
+                Text(
+                  s.isEnglish
+                      ? 'Join the community and share your recipes'
+                      : 'Topluluğa katıl ve tariflerini paylaş',
+                  style: TextStyle(
+                      color: isDark
+                          ? AppColors.darkTextGrey
+                          : AppColors.textGrey),
+                ),
                 const SizedBox(height: 32),
 
                 // İsim
                 TextFormField(
                   controller: _nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Ad Soyad',
-                    prefixIcon: Icon(Icons.person_outline),
+                  decoration: InputDecoration(
+                    labelText: s.isEnglish ? 'Full Name' : 'Ad Soyad',
+                    prefixIcon: const Icon(Icons.person_outline),
                   ),
-                  validator: (v) =>
-                      v == null || v.isEmpty ? 'İsim boş olamaz' : null,
+                  validator: (v) => v == null || v.isEmpty
+                      ? (s.isEnglish
+                      ? 'Name cannot be empty'
+                      : 'İsim boş olamaz')
+                      : null,
                 ),
                 const SizedBox(height: 16),
 
@@ -95,8 +112,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     prefixIcon: Icon(Icons.email_outlined),
                   ),
                   validator: (v) {
-                    if (v == null || v.isEmpty) return 'E-posta boş olamaz';
-                    if (!v.contains('@')) return 'Geçerli e-posta girin';
+                    if (v == null || v.isEmpty)
+                      return s.isEnglish
+                          ? 'Email cannot be empty'
+                          : 'E-posta boş olamaz';
+                    if (!v.contains('@'))
+                      return s.isEnglish
+                          ? 'Enter a valid email'
+                          : 'Geçerli e-posta girin';
                     return null;
                   },
                 ),
@@ -107,19 +130,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   controller: _passwordController,
                   obscureText: _obscurePassword,
                   decoration: InputDecoration(
-                    labelText: 'Şifre',
+                    labelText: s.isEnglish ? 'Password' : 'Şifre',
                     prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
                       icon: Icon(_obscurePassword
                           ? Icons.visibility_outlined
                           : Icons.visibility_off_outlined),
-                      onPressed: () =>
-                          setState(() => _obscurePassword = !_obscurePassword),
+                      onPressed: () => setState(
+                              () => _obscurePassword = !_obscurePassword),
                     ),
                   ),
                   validator: (v) {
-                    if (v == null || v.isEmpty) return 'Şifre boş olamaz';
-                    if (v.length < 6) return 'Şifre en az 6 karakter olmalı';
+                    if (v == null || v.isEmpty)
+                      return s.isEnglish
+                          ? 'Password cannot be empty'
+                          : 'Şifre boş olamaz';
+                    if (v.length < 6)
+                      return s.isEnglish
+                          ? 'Password must be at least 6 characters'
+                          : 'Şifre en az 6 karakter olmalı';
                     return null;
                   },
                 ),
@@ -129,13 +158,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 TextFormField(
                   controller: _confirmPasswordController,
                   obscureText: _obscurePassword,
-                  decoration: const InputDecoration(
-                    labelText: 'Şifre Tekrar',
-                    prefixIcon: Icon(Icons.lock_outline),
+                  decoration: InputDecoration(
+                    labelText:
+                    s.isEnglish ? 'Confirm Password' : 'Şifre Tekrar',
+                    prefixIcon: const Icon(Icons.lock_outline),
                   ),
                   validator: (v) {
                     if (v != _passwordController.text)
-                      return 'Şifreler eşleşmiyor';
+                      return s.isEnglish
+                          ? 'Passwords do not match'
+                          : 'Şifreler eşleşmiyor';
                     return null;
                   },
                 ),
@@ -147,13 +179,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     onPressed: _isLoading ? null : _register,
                     child: _isLoading
                         ? const SizedBox(
-                            height: 20,
-                            width: 20,
-                            child: CircularProgressIndicator(
-                                color: Colors.white, strokeWidth: 2),
-                          )
-                        : const Text('Kayıt Ol',
-                            style: TextStyle(fontSize: 16)),
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                            color: Colors.white, strokeWidth: 2))
+                        : Text(s.register,
+                        style: const TextStyle(fontSize: 16)),
                   ),
                 ),
               ],

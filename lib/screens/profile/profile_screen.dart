@@ -9,9 +9,12 @@ import '../../services/recipe_service.dart';
 import '../../utils/app_constants.dart';
 import '../../widgets/recipe_card.dart';
 import '../recipe/recipe_detail_screen.dart';
+import '../recipe/edit_recipe_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  final AppStrings strings;
+
+  const ProfileScreen({super.key, required this.strings});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -35,57 +38,90 @@ class _ProfileScreenState extends State<ProfileScreen>
     super.dispose();
   }
 
-  Future<void> _logout() async {
-    await _authService.logout();
-  }
-
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final s = widget.strings;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Profilim'),
+        title: Text(s.profile),
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: _logout,
-            tooltip: 'Çıkış Yap',
+            onPressed: () async => await _authService.logout(),
+            tooltip: s.logout,
           ),
         ],
       ),
       body: Column(
         children: [
-          // Profil bilgileri
+          // Profil header
           Container(
             padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: isDark ? AppColors.darkSurface : Colors.white,
+              boxShadow: isDark
+                  ? []
+                  : [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.04),
+                  blurRadius: 8,
+                )
+              ],
+            ),
             child: Row(
               children: [
-                CircleAvatar(
-                  radius: 36,
-                  backgroundColor: AppColors.primary,
-                  child: Text(
-                    (user?.displayName ?? 'U')[0].toUpperCase(),
-                    style: const TextStyle(
-                        fontSize: 28,
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold),
+                Container(
+                  width: 72,
+                  height: 72,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [AppColors.primary, Color(0xFFFF8C69)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withOpacity(0.3),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Text(
+                      (user?.displayName ?? 'U')[0].toUpperCase(),
+                      style: const TextStyle(
+                          fontSize: 28,
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 16),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      user?.displayName ?? 'Kullanıcı',
-                      style: const TextStyle(
-                          fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    Text(
-                      user?.email ?? '',
-                      style: const TextStyle(color: AppColors.textGrey),
-                    ),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        user?.displayName ?? 'Kullanıcı',
+                        style: const TextStyle(
+                            fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        user?.email ?? '',
+                        style: TextStyle(
+                            color: isDark
+                                ? AppColors.darkTextGrey
+                                : AppColors.textGrey,
+                            fontSize: 13),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -95,15 +131,15 @@ class _ProfileScreenState extends State<ProfileScreen>
           TabBar(
             controller: _tabController,
             labelColor: AppColors.primary,
-            unselectedLabelColor: AppColors.textGrey,
+            unselectedLabelColor:
+            isDark ? AppColors.darkTextGrey : AppColors.textGrey,
             indicatorColor: AppColors.primary,
-            tabs: const [
-              Tab(text: 'Tariflerim'),
-              Tab(text: 'Favorilerim'),
+            tabs: [
+              Tab(text: s.myRecipes),
+              Tab(text: s.favorites),
             ],
           ),
 
-          // Tab içerikleri
           Expanded(
             child: TabBarView(
               controller: _tabController,
@@ -129,14 +165,16 @@ class _ProfileScreenState extends State<ProfileScreen>
         }
         final recipes = snapshot.data ?? [];
         if (recipes.isEmpty) {
-          return const Center(
+          return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.add_circle_outline, size: 48, color: AppColors.textGrey),
-                SizedBox(height: 12),
-                Text('Henüz tarif eklemediniz',
-                    style: TextStyle(color: AppColors.textGrey)),
+                const Icon(Icons.add_circle_outline,
+                    size: 64, color: AppColors.textGrey),
+                const SizedBox(height: 16),
+                Text(widget.strings.noRecipes,
+                    style: const TextStyle(
+                        color: AppColors.textGrey, fontSize: 16)),
               ],
             ),
           );
@@ -159,19 +197,22 @@ class _ProfileScreenState extends State<ProfileScreen>
           return const Center(child: CircularProgressIndicator());
         }
 
-        final data = userSnapshot.data!.data() as Map<String, dynamic>?;
+        final data =
+        userSnapshot.data!.data() as Map<String, dynamic>?;
         final favoriteIds =
-            List<String>.from(data?['favoriteRecipeIds'] ?? []);
+        List<String>.from(data?['favoriteRecipeIds'] ?? []);
 
         if (favoriteIds.isEmpty) {
-          return const Center(
+          return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(Icons.favorite_border, size: 48, color: AppColors.textGrey),
-                SizedBox(height: 12),
-                Text('Henüz favori tarif yok',
-                    style: TextStyle(color: AppColors.textGrey)),
+                const Icon(Icons.favorite_border,
+                    size: 64, color: AppColors.textGrey),
+                const SizedBox(height: 16),
+                Text(widget.strings.noFavorites,
+                    style: const TextStyle(
+                        color: AppColors.textGrey, fontSize: 16)),
               ],
             ),
           );
@@ -196,10 +237,15 @@ class _ProfileScreenState extends State<ProfileScreen>
       itemCount: recipes.length,
       itemBuilder: (context, index) => RecipeCard(
         recipe: recipes[index],
+        isEnglish: widget.strings.isEnglish,
         onTap: () => Navigator.push(
           context,
           MaterialPageRoute(
-              builder: (_) => RecipeDetailScreen(recipe: recipes[index])),
+            builder: (_) => RecipeDetailScreen(
+              recipe: recipes[index],
+              strings: widget.strings,
+            ),
+          ),
         ),
       ),
     );
