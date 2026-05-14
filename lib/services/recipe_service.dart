@@ -259,6 +259,24 @@ class RecipeService {
     });
   }
 
+  Future<void> updateComment({
+    required String recipeId,
+    required String commentId,
+    required String text,
+    required double rating,
+  }) async {
+    await _firestore
+        .collection('recipes')
+        .doc(recipeId)
+        .collection('comments')
+        .doc(commentId)
+        .update({
+      'text': text,
+      'rating': rating,
+    });
+    await _updateAverageRating(recipeId);
+  }
+
   Future<bool> isAdmin(String userId) async {
     final doc = await _firestore.collection('users').doc(userId).get();
     return doc.data()?['role'] == 'admin';

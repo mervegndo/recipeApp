@@ -441,7 +441,9 @@ class _HomeTabState extends State<_HomeTab> {
     {'key': 'breakfast', 'label': 'Kahvaltı', 'labelEn': 'Breakfast', 'icon': Icons.free_breakfast_outlined},
     {'key': 'lunch', 'label': 'Öğle', 'labelEn': 'Lunch', 'icon': Icons.lunch_dining_outlined},
     {'key': 'dinner', 'label': 'Akşam', 'labelEn': 'Dinner', 'icon': Icons.dinner_dining_outlined},
+    {'key': 'soup', 'label': 'Çorba', 'labelEn': 'Soup', 'icon': Icons.soup_kitchen_outlined},
     {'key': 'dessert', 'label': 'Tatlı', 'labelEn': 'Dessert', 'icon': Icons.cake_outlined},
+    {'key': 'drink', 'label': 'İçecek', 'labelEn': 'Drink', 'icon': Icons.local_drink_outlined},
     {'key': 'snack', 'label': 'Atıştırmalık', 'labelEn': 'Snack', 'icon': Icons.fastfood_outlined},
     {'key': 'other', 'label': 'Diğer', 'labelEn': 'Other', 'icon': Icons.more_horiz},
   ];

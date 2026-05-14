@@ -44,7 +44,9 @@ class AppCategories {
     {'key': 'breakfast', 'label': 'Kahvaltı', 'labelEn': 'Breakfast', 'emoji': '🍳'},
     {'key': 'lunch', 'label': 'Öğle Yemeği', 'labelEn': 'Lunch', 'emoji': '🥗'},
     {'key': 'dinner', 'label': 'Akşam Yemeği', 'labelEn': 'Dinner', 'emoji': '🍽️'},
+    {'key': 'soup', 'label': 'Çorba', 'labelEn': 'Soup', 'emoji': '🍲'},
     {'key': 'dessert', 'label': 'Tatlı', 'labelEn': 'Dessert', 'emoji': '🍰'},
+    {'key': 'drink', 'label': 'İçecek', 'labelEn': 'Drink', 'emoji': '🥤'},
     {'key': 'snack', 'label': 'Atıştırmalık', 'labelEn': 'Snack', 'emoji': '🥨'},
     {'key': 'other', 'label': 'Diğer', 'labelEn': 'Other', 'emoji': '🍴'},
   ];
