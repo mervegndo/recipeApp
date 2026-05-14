@@ -9,7 +9,6 @@ import '../../services/recipe_service.dart';
 import '../../utils/app_constants.dart';
 import '../../widgets/recipe_card.dart';
 import '../recipe/recipe_detail_screen.dart';
-import '../recipe/edit_recipe_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final AppStrings strings;

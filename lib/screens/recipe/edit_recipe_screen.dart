@@ -1,11 +1,13 @@
 // lib/screens/recipe/edit_recipe_screen.dart
 
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../models/recipe_model.dart';
 import '../../services/recipe_service.dart';
+import '../../services/imgbb_service.dart';
 import '../../utils/app_constants.dart';
 
 class EditRecipeScreen extends StatefulWidget {
@@ -40,6 +42,7 @@ class _EditRecipeScreenState extends State<EditRecipeScreen> {
   late List<String> _steps;
   late List<String> _selectedDietTags;
   File? _newImageFile;
+  Uint8List? _newImageBytes;
   bool _isLoading = false;
 
   @override
@@ -52,8 +55,7 @@ class _EditRecipeScreenState extends State<EditRecipeScreen> {
     _stepController = TextEditingController();
     _cookingTimeController =
         TextEditingController(text: r.cookingTimeMinutes.toString());
-    _servingsController =
-        TextEditingController(text: r.servings.toString());
+    _servingsController = TextEditingController(text: r.servings.toString());
     _caloriesController =
         TextEditingController(text: r.calories?.toString() ?? '');
     _selectedCategory = r.category;
@@ -79,7 +81,14 @@ class _EditRecipeScreenState extends State<EditRecipeScreen> {
     final picker = ImagePicker();
     final picked = await picker.pickImage(
         source: ImageSource.gallery, maxWidth: 800, imageQuality: 80);
-    if (picked != null) setState(() => _newImageFile = File(picked.path));
+    if (picked != null) {
+      if (kIsWeb) {
+        final bytes = await picked.readAsBytes();
+        setState(() => _newImageBytes = bytes);
+      } else {
+        setState(() => _newImageFile = File(picked.path));
+      }
+    }
   }
 
   void _addIngredient() {
@@ -130,6 +139,14 @@ class _EditRecipeScreenState extends State<EditRecipeScreen> {
     setState(() => _isLoading = true);
 
     try {
+      // Yeni fotoğraf varsa ImgBB'ye yükle
+      String? imageUrl = widget.recipe.imageUrl;
+      if (kIsWeb && _newImageBytes != null) {
+        imageUrl = await ImgBBService.uploadImageBytes(_newImageBytes!);
+      } else if (_newImageFile != null) {
+        imageUrl = await ImgBBService.uploadImage(_newImageFile!);
+      }
+
       final updatedRecipe = RecipeModel(
         id: widget.recipe.id,
         userId: widget.recipe.userId,
@@ -139,7 +156,7 @@ class _EditRecipeScreenState extends State<EditRecipeScreen> {
         ingredients: _ingredients,
         steps: _steps,
         category: _selectedCategory,
-        imageUrl: widget.recipe.imageUrl,
+        imageUrl: imageUrl,
         createdAt: widget.recipe.createdAt,
         cookingTimeMinutes: int.tryParse(_cookingTimeController.text) ?? 0,
         servings: int.tryParse(_servingsController.text) ?? 1,
@@ -153,10 +170,7 @@ class _EditRecipeScreenState extends State<EditRecipeScreen> {
         ratingCount: widget.recipe.ratingCount,
       );
 
-      await _recipeService.updateRecipe(
-        updatedRecipe,
-        newImageFile: _newImageFile,
-      );
+      await _recipeService.updateRecipe(updatedRecipe);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -177,6 +191,43 @@ class _EditRecipeScreenState extends State<EditRecipeScreen> {
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: AppColors.error),
+    );
+  }
+
+  Widget _buildImagePreview() {
+    if (kIsWeb && _newImageBytes != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Image.memory(_newImageBytes!, fit: BoxFit.cover),
+      );
+    } else if (_newImageFile != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: Image.file(_newImageFile!, fit: BoxFit.cover),
+      );
+    } else if (widget.recipe.imageUrl != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: CachedNetworkImage(
+          imageUrl: widget.recipe.imageUrl!,
+          fit: BoxFit.cover,
+          errorWidget: (_, __, ___) => _imagePlaceholder(),
+        ),
+      );
+    }
+    return _imagePlaceholder();
+  }
+
+  Widget _imagePlaceholder() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.add_photo_alternate_outlined,
+            size: 48, color: AppColors.textGrey),
+        const SizedBox(height: 8),
+        Text(widget.strings.changePhoto,
+            style: const TextStyle(color: AppColors.textGrey)),
+      ],
     );
   }
 
@@ -217,27 +268,7 @@ class _EditRecipeScreenState extends State<EditRecipeScreen> {
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(color: const Color(0xFFE0E0E0)),
                 ),
-                child: _newImageFile != null
-                    ? ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: Image.file(_newImageFile!, fit: BoxFit.cover))
-                    : widget.recipe.imageUrl != null
-                    ? ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: CachedNetworkImage(
-                        imageUrl: widget.recipe.imageUrl!,
-                        fit: BoxFit.cover))
-                    : Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.add_photo_alternate_outlined,
-                        size: 48, color: AppColors.textGrey),
-                    const SizedBox(height: 8),
-                    Text(s.changePhoto,
-                        style: const TextStyle(
-                            color: AppColors.textGrey)),
-                  ],
-                ),
+                child: _buildImagePreview(),
               ),
             ),
             const SizedBox(height: 20),
@@ -293,8 +324,7 @@ class _EditRecipeScreenState extends State<EditRecipeScreen> {
                     decoration: InputDecoration(
                       labelText:
                       s.isEnglish ? 'Duration (min)' : 'Süre (dk)',
-                      prefixIcon:
-                      const Icon(Icons.access_time_outlined),
+                      prefixIcon: const Icon(Icons.access_time_outlined),
                     ),
                   ),
                 ),
@@ -389,8 +419,7 @@ class _EditRecipeScreenState extends State<EditRecipeScreen> {
               ),
               title: Text(e.value),
               trailing: IconButton(
-                icon: const Icon(Icons.delete_outline,
-                    color: Colors.red),
+                icon: const Icon(Icons.delete_outline, color: Colors.red),
                 onPressed: () =>
                     setState(() => _ingredients.removeAt(e.key)),
               ),
@@ -400,8 +429,7 @@ class _EditRecipeScreenState extends State<EditRecipeScreen> {
                 Expanded(
                   child: TextFormField(
                     controller: _ingredientController,
-                    decoration:
-                    InputDecoration(hintText: s.addIngredient),
+                    decoration: InputDecoration(hintText: s.addIngredient),
                     onFieldSubmitted: (_) => _addIngredient(),
                   ),
                 ),
@@ -418,18 +446,15 @@ class _EditRecipeScreenState extends State<EditRecipeScreen> {
               contentPadding: EdgeInsets.zero,
               leading: CircleAvatar(
                 radius: 14,
-                backgroundColor:
-                AppColors.secondary.withOpacity(0.15),
+                backgroundColor: AppColors.secondary.withOpacity(0.15),
                 child: Text('${e.key + 1}',
                     style: const TextStyle(
                         fontSize: 12, color: AppColors.secondary)),
               ),
               title: Text(e.value),
               trailing: IconButton(
-                icon: const Icon(Icons.delete_outline,
-                    color: Colors.red),
-                onPressed: () =>
-                    setState(() => _steps.removeAt(e.key)),
+                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                onPressed: () => setState(() => _steps.removeAt(e.key)),
               ),
             )),
             Row(
@@ -442,8 +467,7 @@ class _EditRecipeScreenState extends State<EditRecipeScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                ElevatedButton(
-                    onPressed: _addStep, child: Text(s.add)),
+                ElevatedButton(onPressed: _addStep, child: Text(s.add)),
               ],
             ),
             const SizedBox(height: 40),
@@ -463,16 +487,14 @@ class _EditRecipeScreenState extends State<EditRecipeScreen> {
                   fontSize: 16, fontWeight: FontWeight.bold)),
           const SizedBox(width: 8),
           Container(
-            padding:
-            const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
               color: AppColors.primary.withOpacity(0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text('$count',
                 style: const TextStyle(
-                    color: AppColors.primary,
-                    fontWeight: FontWeight.bold)),
+                    color: AppColors.primary, fontWeight: FontWeight.bold)),
           ),
         ],
       ),

@@ -13,6 +13,7 @@ import '../profile/profile_screen.dart';
 import '../search/search_screen.dart';
 import '../spin/spin_screen.dart';
 import '../../main.dart';
+import '../admin/admin_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   final bool isGuest;
@@ -211,34 +212,23 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(height: 8),
 
-            // Admin
             if (_isAdmin)
               _drawerTile(
                 icon: Icons.admin_panel_settings,
                 label: s.adminPanel,
                 color: Colors.red,
                 isDark: isDark,
-                onTap: () => Navigator.pop(context),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AdminScreen(strings: widget.strings),
+                    ),
+                  );
+                },
               ),
 
-            // Çarkıfelek
-            _drawerTile(
-              icon: Icons.casino_outlined,
-              label: s.isEnglish ? '🎡 What to Cook?' : '🎡 Ne Pişirsem?',
-              isDark: isDark,
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => SpinScreen(
-                      strings: widget.strings,
-                      isGuest: widget.isGuest,
-                    ),
-                  ),
-                );
-              },
-            ),
 
             // Dark tema toggle
             Padding(
@@ -488,57 +478,87 @@ class _HomeTabState extends State<_HomeTab> {
                   Builder(
                     builder: (ctx) => GestureDetector(
                       onTap: () => Scaffold.of(ctx).openDrawer(),
-                      child: Row(
-                        children: [
-                          Image.asset(
-                            'assets/images/recipeapplogo.png',
-                            width: 40,
-                            height: 40,
+                      child: Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: isDark ? AppColors.darkCard : AppColors.surfaceContainer,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isDark ? const Color(0xFF3D3530) : AppColors.outline,
                           ),
-                          const SizedBox(width: 10),
+                        ),
+                        child: Icon(
+                          Icons.menu_rounded,
+                          color: isDark ? AppColors.darkTextDark : AppColors.textDark,
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Logo + isim ortada
+                  Row(
+                    children: [
+                      Image.asset(
+                        'assets/images/recipeapplogo.png',
+                        width: 32,
+                        height: 32,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Lezzet Rehberi',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primary,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  // Çarkıfelek butonu
+                  GestureDetector(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => SpinScreen(
+                          strings: widget.strings,
+                          isGuest: widget.isGuest,
+                        ),
+                      ),
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.casino_outlined, color: Colors.white, size: 18),
+                          const SizedBox(width: 6),
                           Text(
-                            'Lezzet Rehberi',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.primary,
-                              letterSpacing: -0.5,
+                            s.isEnglish ? 'What to\nCook?' : 'Bugün ne\npişirsem?',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              height: 1.2,
                             ),
                           ),
                         ],
                       ),
                     ),
-                  ),
-                  PopupMenuButton<String>(
-                    icon: Icon(Icons.tune_rounded,
-                        color: isDark
-                            ? AppColors.darkTextDark
-                            : AppColors.textDark),
-                    onSelected: (v) => setState(() => _sortBy = v),
-                    itemBuilder: (_) => [
-                      PopupMenuItem(
-                        value: 'newest',
-                        child: Row(children: [
-                          Icon(Icons.access_time,
-                              color: _sortBy == 'newest'
-                                  ? AppColors.primary
-                                  : Colors.grey),
-                          const SizedBox(width: 8),
-                          Text(s.newest),
-                        ]),
-                      ),
-                      PopupMenuItem(
-                        value: 'rating',
-                        child: Row(children: [
-                          Icon(Icons.star,
-                              color: _sortBy == 'rating'
-                                  ? AppColors.primary
-                                  : Colors.grey),
-                          const SizedBox(width: 8),
-                          Text(s.topRated),
-                        ]),
-                      ),
-                    ],
                   ),
                 ],
               ),
