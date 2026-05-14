@@ -9,6 +9,8 @@ import '../../models/recipe_model.dart';
 import '../../services/recipe_service.dart';
 import '../../services/imgbb_service.dart';
 import '../../utils/app_constants.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:translator/translator.dart';
 
 class AddRecipeScreen extends StatefulWidget {
   final AppStrings strings;
@@ -21,10 +23,25 @@ class AddRecipeScreen extends StatefulWidget {
 class _AddRecipeScreenState extends State<AddRecipeScreen> {
   final _formKey = GlobalKey<FormState>();
   final _recipeService = RecipeService();
-
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _ingredientController = TextEditingController();
+  final _amountController = TextEditingController();
+  String _selectedUnit = 'cup';
+  final translator = GoogleTranslator();
+
+  final List<Map<String, String>> _unitOptions = [
+    {'key': 'tsp', 'en': 'tsp', 'tr': 'çay kaşığı'},
+    {'key': 'tbsp', 'en': 'tbsp', 'tr': 'yemek kaşığı'},
+    {'key': 'cup', 'en': 'cup', 'tr': 'bardak'},
+    {'key': 'glass', 'en': 'glass', 'tr': 'su bardağı'},
+    {'key': 'piece', 'en': 'piece', 'tr': 'adet'},
+    {'key': 'g', 'en': 'g', 'tr': 'g'},
+    {'key': 'kg', 'en': 'kg', 'tr': 'kg'},
+    {'key': 'ml', 'en': 'ml', 'tr': 'ml'},
+    {'key': 'L', 'en': 'L', 'tr': 'L'},
+    {'key': 'pinch', 'en': 'pinch', 'tr': 'tutam'},
+  ];
   final _stepController = TextEditingController();
   final _cookingTimeController = TextEditingController();
   final _servingsController = TextEditingController();
@@ -38,12 +55,15 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
   File? _imageFile;
   Uint8List? _imageBytes;
   bool _isLoading = false;
+  final _ingredientFocusNode = FocusNode();
 
   @override
   void dispose() {
+    _ingredientFocusNode.dispose();
     _titleController.dispose();
     _descriptionController.dispose();
     _ingredientController.dispose();
+    _amountController.dispose();
     _stepController.dispose();
     _cookingTimeController.dispose();
     _servingsController.dispose();
@@ -65,13 +85,53 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
     }
   }
 
-  void _addIngredient() {
-    final text = _ingredientController.text.trim();
-    if (text.isNotEmpty) {
-      setState(() {
-        _ingredients.add(text);
-        _ingredientController.clear();
-      });
+  Future<void> _addIngredient() async {
+    final ingredientName = _ingredientController.text.trim();
+    final translation = await translator.translate(
+      ingredientName,
+      to: 'en',
+    );
+
+    final englishIngredient = translation.text.toLowerCase();
+
+    if (ingredientName.isEmpty) return;
+    final amount = _amountController.text.trim();
+
+    if (amount.isEmpty) return;
+
+    setState(() {
+      final selectedUnitData =
+      _unitOptions.firstWhere((unit) => unit['key'] == _selectedUnit);
+
+      final unitLabel = widget.strings.isEnglish
+          ? selectedUnitData['en']!
+          : selectedUnitData['tr']!;
+
+      _ingredients.add('$amount $unitLabel $ingredientName');
+      _amountController.clear();
+      _ingredientController.clear();
+      _selectedUnit = 'cup';
+    });
+
+    try {
+      final ingredientRef =
+      FirebaseFirestore.instance.collection('ingredients');
+
+      final existing = await ingredientRef
+          .where('searchName',
+          isEqualTo: englishIngredient)
+          .limit(1)
+          .get();
+
+      if (existing.docs.isEmpty) {
+        await ingredientRef.add({
+          'name': englishIngredient,
+          'searchName': englishIngredient,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (e) {
+      _showError('Ingredient saved locally, but database update failed: $e');
     }
   }
 
@@ -370,19 +430,121 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
                         setState(() => _ingredients.removeAt(e.key)),
                   ),
                 )),
-            Row(
+            Column(
               children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _ingredientController,
-                    decoration:
-                        InputDecoration(hintText: s.addIngredient),
-                    onFieldSubmitted: (_) => _addIngredient(),
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 90,
+                      child: TextFormField(
+                        controller: _amountController,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: s.isEnglish ? 'Amount' : 'Miktar',
+                          hintText: '1',
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(width: 8),
+
+                    SizedBox(
+                      width: 100,
+                      child: DropdownButtonFormField<String>(
+                        value: _selectedUnit,
+                        decoration: InputDecoration(
+                          labelText: s.isEnglish ? 'Unit' : 'Birim',
+                        ),
+                        items: _unitOptions.map((unit) {
+                          return DropdownMenuItem<String>(
+                            value: unit['key'],
+                            child: Text(s.isEnglish ? unit['en']! : unit['tr']!),
+                          );
+                        }).toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedUnit = value ?? 'cup';
+                          });
+                        },
+                      ),
+                    ),
+
+                    const SizedBox(width: 8),
+
+                    Expanded(
+                      child: RawAutocomplete<String>(
+                        textEditingController: _ingredientController,
+                        focusNode: _ingredientFocusNode,
+                        optionsBuilder: (TextEditingValue textEditingValue) async {
+                          final query = textEditingValue.text.trim().toLowerCase();
+
+                          if (query.isEmpty) {
+                            return const Iterable<String>.empty();
+                          }
+
+                          final snapshot = await FirebaseFirestore.instance
+                              .collection('ingredients')
+                              .where('searchName', isGreaterThanOrEqualTo: query)
+                              .where('searchName', isLessThanOrEqualTo: '$query\uf8ff')
+                              .limit(10)
+                              .get();
+
+                          return snapshot.docs
+                              .map((doc) => doc['name'].toString())
+                              .toList();
+                        },
+                        fieldViewBuilder:
+                            (context, controller, focusNode, onFieldSubmitted) {
+                          return TextFormField(
+                            controller: controller,
+                            focusNode: focusNode,
+                            decoration: InputDecoration(
+                              hintText: s.addIngredient,
+                            ),
+                            onFieldSubmitted: (_) => _addIngredient(),
+                          );
+                        },
+                        optionsViewBuilder: (context, onSelected, options) {
+                          return Align(
+                            alignment: Alignment.topLeft,
+                            child: Material(
+                              elevation: 4,
+                              borderRadius: BorderRadius.circular(12),
+                              child: SizedBox(
+                                width: 250,
+                                child: ListView.builder(
+                                  padding: EdgeInsets.zero,
+                                  shrinkWrap: true,
+                                  itemCount: options.length,
+                                  itemBuilder: (context, index) {
+                                    final option = options.elementAt(index);
+
+                                    return ListTile(
+                                      title: Text(option),
+                                      onTap: () {
+                                        onSelected(option);
+                                      },
+                                    );
+                                  },
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 8),
+
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: ElevatedButton(
+                    onPressed: _addIngredient,
+                    child: Text(s.add),
                   ),
                 ),
-                const SizedBox(width: 8),
-                ElevatedButton(
-                    onPressed: _addIngredient, child: Text(s.add)),
               ],
             ),
             const SizedBox(height: 24),
