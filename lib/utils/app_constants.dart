@@ -93,6 +93,12 @@ class AppStrings {
   String get loginToContinue => isEnglish ? 'Login to Continue' : 'Giriş Yap';
   String get continueAsGuest => isEnglish ? 'Continue as Guest' : 'Misafir Olarak Devam Et';
   String get forgotPassword => isEnglish ? 'Forgot Password' : 'Şifremi Unuttum';
+  String get email => isEnglish ? 'Email' : 'E-posta';
+  String get password => isEnglish ? 'Password' : 'Şifre';
+  String get emailRequired => isEnglish ? 'Email cannot be empty' : 'E-posta boş olamaz';
+  String get invalidEmail => isEnglish ? 'Enter a valid email' : 'Geçerli e-posta girin';
+  String get passwordRequired => isEnglish ? 'Password cannot be empty' : 'Şifre boş olamaz';
+  String get enterEmailToReset => isEnglish ? 'Enter your email to receive a reset link' : 'Şifre sıfırlama bağlantısı için e-postanızı girin';
   String get darkTheme => isEnglish ? 'Dark Theme' : 'Karanlık Tema';
   String get language => isEnglish ? 'Language' : 'Dil';
   String get english => 'English';

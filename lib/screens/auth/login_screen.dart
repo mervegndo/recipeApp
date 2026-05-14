@@ -62,15 +62,21 @@ class _LoginScreenState extends State<LoginScreen> {
       context: context,
       builder: (_) => AlertDialog(
         title: Text(widget.strings.forgotPassword),
-        content: TextField(
-          controller: emailController,
-          keyboardType: TextInputType.emailAddress,
-          decoration: InputDecoration(
-            labelText: widget.strings.isEnglish
-                ? 'Your email address'
-                : 'E-posta adresiniz',
-            prefixIcon: const Icon(Icons.email_outlined),
-          ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(widget.strings.enterEmailToReset, 
+              style: const TextStyle(fontSize: 14, color: AppColors.textMedium)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: emailController,
+              keyboardType: TextInputType.emailAddress,
+              decoration: InputDecoration(
+                labelText: widget.strings.email,
+                prefixIcon: const Icon(Icons.email_outlined),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -79,16 +85,18 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              if (emailController.text.trim().isEmpty) return;
+              final email = emailController.text.trim();
+              if (email.isEmpty) return;
+              
               try {
-                await _authService
-                    .resetPassword(emailController.text.trim());
+                await _authService.resetPassword(email);
                 if (mounted) {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(widget.strings.passwordResetSent),
                       backgroundColor: Colors.green,
+                      behavior: SnackBarBehavior.floating,
                     ),
                   );
                 }
@@ -163,19 +171,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'E-posta',
-                    prefixIcon: Icon(Icons.email_outlined),
+                  decoration: InputDecoration(
+                    labelText: widget.strings.email,
+                    prefixIcon: const Icon(Icons.email_outlined),
                   ),
                   validator: (v) {
-                    if (v == null || v.isEmpty)
-                      return widget.strings.isEnglish
-                          ? 'Email cannot be empty'
-                          : 'E-posta boş olamaz';
-                    if (!v.contains('@'))
-                      return widget.strings.isEnglish
-                          ? 'Enter a valid email'
-                          : 'Geçerli e-posta girin';
+                    if (v == null || v.isEmpty) return widget.strings.emailRequired;
+                    if (!v.contains('@')) return widget.strings.invalidEmail;
                     return null;
                   },
                 ),
@@ -186,8 +188,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   controller: _passwordController,
                   obscureText: _obscurePassword,
                   decoration: InputDecoration(
-                    labelText:
-                    widget.strings.isEnglish ? 'Password' : 'Şifre',
+                    labelText: widget.strings.password,
                     prefixIcon: const Icon(Icons.lock_outline),
                     suffixIcon: IconButton(
                       icon: Icon(_obscurePassword
@@ -198,10 +199,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   validator: (v) {
-                    if (v == null || v.isEmpty)
-                      return widget.strings.isEnglish
-                          ? 'Password cannot be empty'
-                          : 'Şifre boş olamaz';
+                    if (v == null || v.isEmpty) return widget.strings.passwordRequired;
                     return null;
                   },
                 ),
