@@ -146,6 +146,15 @@ class AppStrings {
   String get loginRequiredMsg => isEnglish
       ? 'Please login or create an account to use this feature.'
       : 'Bu özelliği kullanmak için lütfen giriş yapın veya hesap oluşturun.';
+
+  // Spin Wheel Strings
+  String get chooseOptionCount => isEnglish ? 'Select number of options' : 'Kaç adet seçenek olacağını seçiniz';
+  String get selectRecipes => isEnglish ? 'Select Recipes' : 'Tarifleri Seçiniz';
+  String get imFeelingLucky => isEnglish ? "I'm Feeling Lucky" : 'Şansıma Güveniyorum';
+  String selectedRecipesCountLabel(int count) => isEnglish ? '$count recipes selected' : '$count tarif seçildi';
+  String pickXRecipes(int x) => isEnglish ? 'Pick $x recipes' : '$x tarif seçin';
+  String get luckyRecipeTitle => isEnglish ? '🎉 Here is your choice!' : '🎉 İşte senin seçimin!';
+  String get viewRecipe => isEnglish ? 'View Recipe' : 'Tarifi Gör';
 }
 
 class AppTheme {
