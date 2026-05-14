@@ -754,7 +754,9 @@ class _HomeTabState extends State<_HomeTab> {
             child: SizedBox(
               height: 220,
               child: StreamBuilder<List<RecipeModel>>(
-                stream: _recipeService.getTopRatedRecipes(),
+                stream: _selectedCategory == 'all'
+                    ? _recipeService.getTopRatedRecipes()
+                    : _recipeService.getTopRatedByCategory(_selectedCategory),
                 builder: (context, snapshot) {
                   if (!snapshot.hasData || snapshot.data!.isEmpty) {
                     return Center(

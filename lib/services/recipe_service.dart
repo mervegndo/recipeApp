@@ -19,8 +19,8 @@ class RecipeService {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => RecipeModel.fromMap(doc.data(), doc.id))
-            .toList());
+        .map((doc) => RecipeModel.fromMap(doc.data(), doc.id))
+        .toList());
   }
 
   Stream<List<RecipeModel>> getTopRatedRecipes() {
@@ -29,8 +29,19 @@ class RecipeService {
         .orderBy('averageRating', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => RecipeModel.fromMap(doc.data(), doc.id))
-            .toList());
+        .map((doc) => RecipeModel.fromMap(doc.data(), doc.id))
+        .toList());
+  }
+
+  Stream<List<RecipeModel>> getTopRatedByCategory(String category) {
+    return _firestore
+        .collection('recipes')
+        .where('category', isEqualTo: category)
+        .orderBy('averageRating', descending: true)
+        .snapshots()
+        .map((snapshot) => snapshot.docs
+        .map((doc) => RecipeModel.fromMap(doc.data(), doc.id))
+        .toList());
   }
 
   Stream<List<RecipeModel>> getRecipesByCategory(String category) {
@@ -40,8 +51,8 @@ class RecipeService {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => RecipeModel.fromMap(doc.data(), doc.id))
-            .toList());
+        .map((doc) => RecipeModel.fromMap(doc.data(), doc.id))
+        .toList());
   }
 
   Stream<List<RecipeModel>> getRecipesByDietTag(String tag) {
@@ -51,8 +62,8 @@ class RecipeService {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => RecipeModel.fromMap(doc.data(), doc.id))
-            .toList());
+        .map((doc) => RecipeModel.fromMap(doc.data(), doc.id))
+        .toList());
   }
 
   Stream<List<RecipeModel>> getUserRecipes(String userId) {
@@ -62,15 +73,14 @@ class RecipeService {
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) => snapshot.docs
-            .map((doc) => RecipeModel.fromMap(doc.data(), doc.id))
-            .toList());
+        .map((doc) => RecipeModel.fromMap(doc.data(), doc.id))
+        .toList());
   }
 
-  // ImgBB ile fotoğraf yükleme — Firebase Storage kullanmaz
-  Future<void> addRecipe(RecipeModel recipe, {File? imageFile, Uint8List? imageBytes, String? imageUrl}) async {
+  Future<void> addRecipe(RecipeModel recipe,
+      {File? imageFile, Uint8List? imageBytes, String? imageUrl}) async {
     String? finalImageUrl = imageUrl ?? recipe.imageUrl;
 
-    // Eğer imageUrl zaten set edilmemişse, dosyadan yükle
     if (finalImageUrl == null) {
       if (kIsWeb && imageBytes != null) {
         finalImageUrl = await ImgBBService.uploadImageBytes(imageBytes);
@@ -103,7 +113,8 @@ class RecipeService {
         .set(recipeWithImage.toMap());
   }
 
-  Future<void> updateRecipe(RecipeModel recipe, {File? newImageFile, Uint8List? newImageBytes}) async {
+  Future<void> updateRecipe(RecipeModel recipe,
+      {File? newImageFile, Uint8List? newImageBytes}) async {
     String? imageUrl = recipe.imageUrl;
 
     if (kIsWeb && newImageBytes != null) {
@@ -128,12 +139,9 @@ class RecipeService {
   }
 
   Future<void> deleteRecipe(String recipeId) async {
-    // Firebase Storage kullanmıyoruz artık, sadece Firestore'dan sil
     try {
       await _storage.ref('recipes/$recipeId').delete();
-    } catch (_) {
-      // Storage'da yoksa sessizce devam et
-    }
+    } catch (_) {}
     await _firestore.collection('recipes').doc(recipeId).delete();
   }
 
