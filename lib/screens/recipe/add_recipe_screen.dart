@@ -205,7 +205,6 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
             : null,
         dietTags: _selectedDietTags,
         imageUrl: imageUrl,
-        // ✅ Cloud Function'ın hangi dile çevireceğini belirler
         originalLanguage: widget.strings.isEnglish ? 'en' : 'tr',
       );
 
@@ -362,7 +361,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
             ),
             const SizedBox(height: 16),
 
-            //Kalori
+            // Kalori
             TextFormField(
               controller: _caloriesController,
               keyboardType: TextInputType.number,
