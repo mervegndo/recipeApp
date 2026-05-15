@@ -184,19 +184,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Image.asset(
-                    'assets/images/recipeapplogo.png',
-                    width: 60,
-                    height: 60,
+                    'assets/images/recipeapplogo_white.png',
+                    width: 100,
+                    height: 100,
                   ),
                   const SizedBox(height: 12),
-                  const Text('Lezzet Rehberi',
-                      style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold)),
                   Text(
                     widget.isGuest
                         ? (s.isEnglish ? 'Guest' : 'Misafir')
@@ -321,7 +316,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.pop(context);
                 showAboutDialog(
                   context: context,
-                  applicationName: 'Lezzet Rehberi',
+                  applicationName: 'Gusto',
                   applicationVersion: '1.0.0',
                   children: [Text(s.tagline)],
                 );
@@ -515,24 +510,10 @@ class _HomeTabState extends State<_HomeTab> {
                     ),
                   ),
 
-                  Row(
-                    children: [
-                      Image.asset(
-                        'assets/images/recipeapplogo.png',
-                        width: 32,
-                        height: 32,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Lezzet Rehberi',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.primary,
-                          letterSpacing: -0.5,
-                        ),
-                      ),
-                    ],
+                  Image.asset(
+                    'assets/images/recipeapplogo.png',
+                    width: 75,
+                    height: 75,
                   ),
 
                   // Çarkıfelek butonu
