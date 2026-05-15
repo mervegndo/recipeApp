@@ -23,20 +23,11 @@ class DefaultFirebaseOptions {
       case TargetPlatform.android:
         return android;
       case TargetPlatform.iOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for ios - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return ios;
       case TargetPlatform.macOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for macos - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return macos;
       case TargetPlatform.windows:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for windows - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return windows;
       case TargetPlatform.linux:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for linux - '
@@ -65,6 +56,34 @@ class DefaultFirebaseOptions {
     authDomain: 'recipe-app-e163c.firebaseapp.com',
     storageBucket: 'recipe-app-e163c.firebasestorage.app',
     measurementId: 'G-L3W9LXWMX0',
+  );
+
+  static const FirebaseOptions macos = FirebaseOptions(
+    apiKey: 'AIzaSyDoTGz9fVkH1icwbf0JsbgDNpDJNRJNFz0',
+    appId: '1:371845310539:ios:76eddbe90f40a6697b85ce',
+    messagingSenderId: '371845310539',
+    projectId: 'recipe-app-e163c',
+    storageBucket: 'recipe-app-e163c.firebasestorage.app',
+    iosBundleId: 'com.example.recipeApp',
+  );
+
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'AIzaSyDoTGz9fVkH1icwbf0JsbgDNpDJNRJNFz0',
+    appId: '1:371845310539:ios:98fd9616d734567a7b85ce',
+    messagingSenderId: '371845310539',
+    projectId: 'recipe-app-e163c',
+    storageBucket: 'recipe-app-e163c.firebasestorage.app',
+    iosBundleId: 'com.emrecanturk.recipeapp',
+  );
+
+  static const FirebaseOptions windows = FirebaseOptions(
+    apiKey: 'AIzaSyCTpLgXj4mSNwFIzXFy0XCpACisVF3AipM',
+    appId: '1:371845310539:web:14f15bcc6f27a5ee7b85ce',
+    messagingSenderId: '371845310539',
+    projectId: 'recipe-app-e163c',
+    authDomain: 'recipe-app-e163c.firebaseapp.com',
+    storageBucket: 'recipe-app-e163c.firebasestorage.app',
+    measurementId: 'G-7EG0WSQ75T',
   );
 
 }
