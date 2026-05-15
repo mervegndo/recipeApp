@@ -187,15 +187,13 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
 
     final ratio = _currentServings / baseServings;
 
-    // Sayı + birim formatını bul ve ölçekle (örn: "200g", "2 tbsp", "3 adet")
     return ingredient.replaceAllMapped(
       RegExp(r'(\d+(?:[.,]\d+)?)'),
           (match) {
-        final original = double.tryParse(
-            match.group(1)!.replaceAll(',', '.'));
+        final original =
+        double.tryParse(match.group(1)!.replaceAll(',', '.'));
         if (original == null) return match.group(0)!;
         final scaled = original * ratio;
-        // Tam sayıysa tam göster, değilse 1 ondalık
         if (scaled == scaled.roundToDouble()) {
           return scaled.toInt().toString();
         } else {
@@ -211,10 +209,11 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
     final s = widget.strings;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final textColor =
-    isDark ? AppColors.darkTextDark : AppColors.textDark;
-    final subColor =
-    isDark ? AppColors.darkTextGrey : AppColors.textGrey;
+    // ✅ Kullanıcının diline göre lokalize içerik
+    final langCode = s.isEnglish ? 'en' : 'tr';
+
+    final textColor = isDark ? AppColors.darkTextDark : AppColors.textDark;
+    final subColor = isDark ? AppColors.darkTextGrey : AppColors.textGrey;
     final cardColor = isDark ? AppColors.darkCard : Colors.white;
     final surfaceColor =
     isDark ? AppColors.darkSurface : AppColors.surfaceContainer;
@@ -258,7 +257,8 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                   ? CachedNetworkImage(
                 imageUrl: recipe.imageUrl!,
                 fit: BoxFit.cover,
-                errorWidget: (_, __, ___) => _placeholderHeader(isDark),
+                errorWidget: (_, __, ___) =>
+                    _placeholderHeader(isDark),
               )
                   : _placeholderHeader(isDark),
             ),
@@ -284,8 +284,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                     child: Text(
                       '${AppCategories.getEmojiByKey(recipe.category)} ${AppCategories.getLabelByKey(recipe.category, isEnglish: s.isEnglish)}',
                       style: TextStyle(
-                        color:
-                        AppColors.categoryColors[recipe.category] ??
+                        color: AppColors.categoryColors[recipe.category] ??
                             AppColors.textGrey,
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
@@ -294,9 +293,9 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                   ),
                   const SizedBox(height: 12),
 
-                  // Başlık
+                  // ✅ Lokalize başlık
                   Text(
-                    recipe.title,
+                    recipe.localizedTitle(langCode),
                     style: TextStyle(
                       fontSize: 24,
                       fontWeight: FontWeight.bold,
@@ -389,8 +388,9 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                     Wrap(
                       spacing: 8,
                       runSpacing: 4,
-                      children:
-                      recipe.dietTags.map((tag) => _dietTag(tag, s)).toList(),
+                      children: recipe.dietTags
+                          .map((tag) => _dietTag(tag, s))
+                          .toList(),
                     ),
                     const SizedBox(height: 12),
                   ],
@@ -412,9 +412,39 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                   _buildOwnerCard(isDark, textColor, subColor, cardColor),
                   const SizedBox(height: 20),
 
-                  // ---- Açıklama ----
+                  // ✅ Çeviri hazır değilse uyarı badge'i
+                  if (!recipe.hasTranslation(langCode))
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 16),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: Colors.amber.withOpacity(0.4)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.translate,
+                              size: 16, color: Colors.amber),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              langCode == 'tr'
+                                  ? 'Çeviri hazırlanıyor, orijinal dil gösteriliyor...'
+                                  : 'Translation in progress, showing original...',
+                              style: const TextStyle(
+                                  fontSize: 12, color: Colors.amber),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  // ✅ Lokalize açıklama
                   Text(
-                    recipe.description,
+                    recipe.localizedDescription(langCode),
                     style: TextStyle(
                       fontSize: 15,
                       color: textColor,
@@ -424,16 +454,18 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                   const SizedBox(height: 28),
 
                   // ---- Kişi sayısı scaler ----
-                  _buildServingsScaler(s, isDark, textColor, subColor, cardColor),
+                  _buildServingsScaler(
+                      s, isDark, textColor, subColor, cardColor),
                   const SizedBox(height: 20),
 
-                  // ---- Malzemeler ----
+                  // ✅ Lokalize malzemeler
                   _buildSectionTitle(
                     '🥕 ${s.ingredients} ($_currentServings ${s.isEnglish ? 'servings' : 'kişi için'})',
                     textColor,
                   ),
                   const SizedBox(height: 12),
-                  ...recipe.ingredients
+                  ...recipe
+                      .localizedIngredients(langCode)
                       .map((i) => _buildBulletItem(
                     _scaleIngredient(i),
                     isDark,
@@ -442,10 +474,14 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                       .toList(),
                   const SizedBox(height: 28),
 
-                  // ---- Yapılış ----
+                  // ✅ Lokalize adımlar
                   _buildSectionTitle('👨‍🍳 ${s.steps}', textColor),
                   const SizedBox(height: 12),
-                  ...recipe.steps.asMap().entries.map((e) {
+                  ...recipe
+                      .localizedSteps(langCode)
+                      .asMap()
+                      .entries
+                      .map((e) {
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 14),
                       child: Row(
@@ -480,7 +516,8 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                   const SizedBox(height: 28),
 
                   // ---- Yorumlar ----
-                  _buildCommentsSection(s, isDark, textColor, subColor, cardColor),
+                  _buildCommentsSection(
+                      s, isDark, textColor, subColor, cardColor),
                 ],
               ),
             ),
@@ -509,7 +546,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
       ),
       child: Row(
         children: [
-          Icon(Icons.people_outline, color: AppColors.primary, size: 20),
+          const Icon(Icons.people_outline, color: AppColors.primary, size: 20),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -521,7 +558,6 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
               ),
             ),
           ),
-          // Azalt butonu
           GestureDetector(
             onTap: () {
               if (_currentServings > 1) {
@@ -544,14 +580,13 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 14),
             child: Text(
               '$_currentServings',
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: AppColors.primary,
               ),
             ),
           ),
-          // Artır butonu
           GestureDetector(
             onTap: () {
               if (_currentServings < 50) {
@@ -583,9 +618,8 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
     final displayName = _ownerDisplayName?.isNotEmpty == true
         ? _ownerDisplayName!
         : widget.recipe.userEmail.split('@').first;
-    final avatarLetter = displayName.isNotEmpty
-        ? displayName[0].toUpperCase()
-        : '?';
+    final avatarLetter =
+    displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -598,7 +632,6 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
       ),
       child: Row(
         children: [
-          // Avatar — fotoğraf varsa göster, yoksa gradient harf
           ClipOval(
             child: _ownerLoading
                 ? Container(
@@ -700,7 +733,6 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
         _buildSectionTitle('💬 ${s.comments}', textColor),
         const SizedBox(height: 16),
 
-        // Misafir uyarısı
         if (widget.isGuest) ...[
           GestureDetector(
             onTap: () => Navigator.pop(context),
@@ -739,7 +771,6 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
           ),
         ],
 
-        // Yorum formu
         if (!widget.isGuest) ...[
           Row(
             children: [
@@ -748,8 +779,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                       fontWeight: FontWeight.w600, color: textColor)),
               ...List.generate(5, (i) {
                 return GestureDetector(
-                  onTap: () =>
-                      setState(() => _userRating = i + 1.0),
+                  onTap: () => setState(() => _userRating = i + 1.0),
                   child: Icon(
                     i < _userRating
                         ? Icons.star_rounded
@@ -785,7 +815,6 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
           const SizedBox(height: 20),
         ],
 
-        // Yorum listesi
         StreamBuilder<QuerySnapshot>(
           stream: _recipeService.getComments(widget.recipe.id),
           builder: (context, snapshot) {
@@ -803,11 +832,9 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
               children: snapshot.data!.docs.map((doc) {
                 final data = doc.data() as Map<String, dynamic>;
                 final isCommentOwner =
-                    FirebaseAuth.instance.currentUser?.uid ==
-                        data['userId'];
-                final commentName = (data['userName'] as String?)
-                    ?.isNotEmpty ==
-                    true
+                    FirebaseAuth.instance.currentUser?.uid == data['userId'];
+                final commentName =
+                (data['userName'] as String?)?.isNotEmpty == true
                     ? data['userName'] as String
                     : (data['userEmail'] as String? ?? '')
                     .split('@')
@@ -834,13 +861,12 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                     children: [
                       Row(
                         children: [
-                          // Yorum sahibi avatarı
                           Container(
                             width: 34,
                             height: 34,
-                            decoration: BoxDecoration(
+                            decoration: const BoxDecoration(
                               shape: BoxShape.circle,
-                              gradient: const LinearGradient(
+                              gradient: LinearGradient(
                                 colors: [
                                   AppColors.primary,
                                   Color(0xFFFF8C69)
@@ -952,7 +978,8 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
           Expanded(
             child: Text(
               text,
-              style: TextStyle(fontSize: 14, color: textColor, height: 1.4),
+              style:
+              TextStyle(fontSize: 14, color: textColor, height: 1.4),
             ),
           ),
         ],

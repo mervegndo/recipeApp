@@ -299,11 +299,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Image.asset(
                     'assets/images/recipeapplogo.png',
-                    width: 60,
-                    height: 60,
+                    width: 128,
+                    height: 128,
                   ),
                   const SizedBox(height: 12),
-
                   Text(
                     widget.isGuest
                         ? (s.isEnglish ? 'Guest' : 'Misafir')
@@ -414,7 +413,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 showAboutDialog(
                   context: context,
                   applicationName: 'Gusto',
-                  applicationVersion: '1.0.7',
+                  applicationVersion: '1.0.8',
                   children: [Text(s.tagline)],
                 );
               },
@@ -840,10 +839,10 @@ class _HomeTabState extends State<_HomeTab> {
               final recipes = snapshot.data!.take(10).toList();
               return SliverToBoxAdapter(
                 child: SizedBox(
-                  height: 200,
+                  height: 230,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                     itemCount: recipes.length,
                     itemBuilder: (context, index) {
                       final recipe = recipes[index];
@@ -858,96 +857,103 @@ class _HomeTabState extends State<_HomeTab> {
                             ),
                           ),
                         ),
-                        child: Container(
+                        child: SizedBox(
                           width: 150,
-                          margin: const EdgeInsets.only(right: 12),
-                          decoration: BoxDecoration(
-                            color: isDark
-                                ? AppColors.darkCard
-                                : AppColors.surface,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 12),
+                            decoration: BoxDecoration(
                               color: isDark
-                                  ? const Color(0xFF3D3530)
-                                  : AppColors.outline,
+                                  ? AppColors.darkCard
+                                  : AppColors.surface,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: isDark
+                                    ? const Color(0xFF3D3530)
+                                    : AppColors.outline,
+                              ),
                             ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              ClipRRect(
-                                borderRadius: const BorderRadius.vertical(
-                                    top: Radius.circular(15)),
-                                child: recipe.imageUrl != null
-                                    ? Image.network(
-                                  recipe.imageUrl!,
-                                  height: 120,
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) =>
-                                      _imagePlaceholder(isDark),
-                                )
-                                    : _imagePlaceholder(isDark),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.all(10),
-                                child: Column(
-                                  crossAxisAlignment:
-                                  CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      recipe.title,
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: isDark
-                                            ? AppColors.darkTextDark
-                                            : AppColors.textDark,
-                                      ),
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Row(
-                                      children: [
-                                        const Icon(Icons.star_rounded,
-                                            color: Color(0xFFFFB347),
-                                            size: 13),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          recipe.averageRating
-                                              .toStringAsFixed(1),
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
-                                            color: isDark
-                                                ? AppColors.darkTextGrey
-                                                : AppColors.textGrey,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Icon(Icons.access_time_outlined,
-                                            size: 12,
-                                            color: isDark
-                                                ? AppColors.darkTextGrey
-                                                : AppColors.textGrey),
-                                        const SizedBox(width: 2),
-                                        Text(
-                                          '${recipe.cookingTimeMinutes} ${s.isEnglish ? 'min' : 'dk'}',
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: isDark
-                                                ? AppColors.darkTextGrey
-                                                : AppColors.textGrey,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                ClipRRect(
+                                  borderRadius: const BorderRadius.vertical(
+                                      top: Radius.circular(15)),
+                                  child: recipe.imageUrl != null
+                                      ? Image.network(
+                                    recipe.imageUrl!,
+                                    height: 110,
+                                    width: double.infinity,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) =>
+                                        _imagePlaceholder(isDark),
+                                  )
+                                      : _imagePlaceholder(isDark),
                                 ),
-                              ),
-                            ],
-                          ),
+                                Padding(
+                                  padding: const EdgeInsets.all(8),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        recipe.title,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: isDark
+                                              ? AppColors.darkTextDark
+                                              : AppColors.textDark,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Row(
+                                        children: [
+                                          const Icon(Icons.star_rounded,
+                                              color: Color(0xFFFFB347),
+                                              size: 12),
+                                          const SizedBox(width: 3),
+                                          Text(
+                                            recipe.averageRating
+                                                .toStringAsFixed(1),
+                                            style: TextStyle(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              color: isDark
+                                                  ? AppColors.darkTextGrey
+                                                  : AppColors.textGrey,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Icon(Icons.access_time_outlined,
+                                              size: 11,
+                                              color: isDark
+                                                  ? AppColors.darkTextGrey
+                                                  : AppColors.textGrey),
+                                          const SizedBox(width: 2),
+                                          Flexible(
+                                            child: Text(
+                                              '${recipe.cookingTimeMinutes} ${s.isEnglish ? 'min' : 'dk'}',
+                                              style: TextStyle(
+                                                fontSize: 10,
+                                                color: isDark
+                                                    ? AppColors.darkTextGrey
+                                                    : AppColors.textGrey,
+                                              ),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ), // SizedBox
                         ),
                       );
                     },
@@ -1052,29 +1058,32 @@ class _HomeTabState extends State<_HomeTab> {
                 );
               }
 
-              return SliverList(
-                delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                    return RecipeCard(
-                      recipe: recipes[index],
-                      isEnglish: s.isEnglish,
-                      onTap: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => RecipeDetailScreen(
-                            recipe: recipes[index],
-                            isGuest: widget.isGuest,
-                            isAdmin: widget.isAdmin,
-                            strings: widget.strings,
+              return SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 100),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                      return RecipeCard(
+                        recipe: recipes[index],
+                        isEnglish: s.isEnglish,
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => RecipeDetailScreen(
+                              recipe: recipes[index],
+                              isGuest: widget.isGuest,
+                              isAdmin: widget.isAdmin,
+                              strings: widget.strings,
+                            ),
                           ),
                         ),
-                      ),
-                      onDelete: widget.isAdmin
-                          ? () => _adminDelete(recipes[index].id)
-                          : null,
-                    );
-                  },
-                  childCount: recipes.length,
+                        onDelete: widget.isAdmin
+                            ? () => _adminDelete(recipes[index].id)
+                            : null,
+                      );
+                    },
+                    childCount: recipes.length,
+                  ),
                 ),
               );
             },
