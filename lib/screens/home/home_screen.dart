@@ -89,56 +89,166 @@ class _HomeScreenState extends State<HomeScreen> {
             onGuestWarning: _showGuestWarning,
           ),
           SearchScreen(strings: widget.strings, isGuest: widget.isGuest),
+          SpinScreen(strings: widget.strings, isGuest: widget.isGuest),
           widget.isGuest
               ? _buildGuestPlaceholder()
               : ProfileScreen(strings: widget.strings),
         ],
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (i) {
-          if (i == 2 && widget.isGuest) {
-            _showGuestWarning();
-            return;
-          }
-          setState(() => _currentIndex = i);
-        },
-        destinations: [
-          NavigationDestination(
-            icon: const Icon(Icons.home_outlined),
-            selectedIcon: const Icon(Icons.home),
-            label: widget.strings.home,
+      bottomNavigationBar: _buildBottomBar(isDark),
+    );
+  }
+
+  Widget _buildBottomBar(bool isDark) {
+    final bg = isDark ? AppColors.darkSurface : Colors.white;
+    final active = AppColors.primary;
+    final inactive = isDark ? AppColors.darkTextGrey : AppColors.textGrey;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: bg,
+        border: Border(
+          top: BorderSide(
+            color: isDark
+                ? const Color(0xFF3D3530)
+                : AppColors.outline.withOpacity(0.6),
+            width: 0.8,
           ),
-          NavigationDestination(
-            icon: const Icon(Icons.search_outlined),
-            selectedIcon: const Icon(Icons.search),
-            label: widget.strings.isEnglish ? 'Search' : 'Ara',
-          ),
-          NavigationDestination(
-            icon: const Icon(Icons.person_outline),
-            selectedIcon: const Icon(Icons.person),
-            label: widget.strings.profile,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(isDark ? 0.3 : 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, -2),
           ),
         ],
       ),
-      floatingActionButton: _currentIndex == 0
-          ? FloatingActionButton(
-        onPressed: () {
-          if (widget.isGuest) {
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 64,
+          child: Row(
+            children: [
+              // Akış
+              _navItem(
+                icon: Icons.home_outlined,
+                selectedIcon: Icons.home,
+                label: widget.strings.home,
+                index: 0,
+                active: active,
+                inactive: inactive,
+              ),
+              // Tarifler (Ara)
+              _navItem(
+                icon: Icons.search_outlined,
+                selectedIcon: Icons.search,
+                label: widget.strings.isEnglish ? 'Recipes' : 'Tarifler',
+                index: 1,
+                active: active,
+                inactive: inactive,
+              ),
+              // Ortadaki + butonu
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    if (widget.isGuest) {
+                      _showGuestWarning();
+                      return;
+                    }
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            AddRecipeScreen(strings: widget.strings),
+                      ),
+                    );
+                  },
+                  child: Center(
+                    child: Container(
+                      width: 52,
+                      height: 52,
+                      decoration: BoxDecoration(
+                        color: AppColors.primary,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withOpacity(0.4),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(Icons.add,
+                          color: Colors.white, size: 26),
+                    ),
+                  ),
+                ),
+              ),
+              // Çark
+              _navItem(
+                icon: Icons.casino_outlined,
+                selectedIcon: Icons.casino,
+                label: widget.strings.isEnglish ? 'Spinner' : 'Çark',
+                index: 2,
+                active: active,
+                inactive: inactive,
+              ),
+              // Profil
+              _navItem(
+                icon: Icons.person_outline,
+                selectedIcon: Icons.person,
+                label: widget.strings.profile,
+                index: 3,
+                active: active,
+                inactive: inactive,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _navItem({
+    required IconData icon,
+    required IconData selectedIcon,
+    required String label,
+    required int index,
+    required Color active,
+    required Color inactive,
+  }) {
+    final isSelected = _currentIndex == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          if (index == 3 && widget.isGuest) {
             _showGuestWarning();
             return;
           }
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => AddRecipeScreen(strings: widget.strings),
-            ),
-          );
+          setState(() => _currentIndex = index);
         },
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add, color: Colors.white),
-      )
-          : null,
+        behavior: HitTestBehavior.opaque,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              isSelected ? selectedIcon : icon,
+              color: isSelected ? active : inactive,
+              size: 24,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight:
+                isSelected ? FontWeight.w600 : FontWeight.normal,
+                color: isSelected ? active : inactive,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -147,7 +257,8 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.person_outline, size: 80, color: AppColors.textGrey),
+          const Icon(Icons.person_outline,
+              size: 80, color: AppColors.textGrey),
           const SizedBox(height: 16),
           Text(
             widget.strings.isEnglish
@@ -184,19 +295,21 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Image.asset(
-                    'assets/images/recipeapplogo_white.png',
-                    width: 100,
-                    height: 100,
+                    'assets/images/recipeapplogo.png',
+                    width: 60,
+                    height: 60,
                   ),
                   const SizedBox(height: 12),
+
                   Text(
                     widget.isGuest
                         ? (s.isEnglish ? 'Guest' : 'Misafir')
                         : (FirebaseAuth.instance.currentUser?.email ?? ''),
-                    style: const TextStyle(color: Colors.white70, fontSize: 13),
+                    style: const TextStyle(
+                        color: Colors.white70, fontSize: 13),
                   ),
                 ],
               ),
@@ -248,7 +361,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            // Dil seçeneği — dropdown
+            // Dil toggle
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Row(
@@ -258,50 +371,34 @@ class _HomeScreenState extends State<HomeScreen> {
                           ? AppColors.darkTextGrey
                           : AppColors.textGrey),
                   const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      s.language,
+                  Text('🇹🇷 TR',
                       style: TextStyle(
-                          color: isDark
-                              ? AppColors.darkTextDark
-                              : AppColors.textDark,
-                          fontSize: 15),
-                    ),
-                  ),
-                  DropdownButton<bool>(
+                        color: !s.isEnglish
+                            ? AppColors.primary
+                            : (isDark
+                            ? AppColors.darkTextGrey
+                            : AppColors.textGrey),
+                        fontWeight: !s.isEnglish
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                      )),
+                  Switch(
                     value: s.isEnglish,
-                    underline: const SizedBox(),
-                    dropdownColor:
-                    isDark ? AppColors.darkCard : Colors.white,
-                    style: TextStyle(
-                        color: isDark
-                            ? AppColors.darkTextDark
-                            : AppColors.textDark,
-                        fontSize: 14),
-                    items: [
-                      DropdownMenuItem(
-                        value: false,
-                        child: Row(children: [
-                          const Text('🇹🇷 '),
-                          const SizedBox(width: 4),
-                          const Text('Türkçe'),
-                        ]),
-                      ),
-                      DropdownMenuItem(
-                        value: true,
-                        child: Row(children: [
-                          const Text('🇬🇧 '),
-                          const SizedBox(width: 4),
-                          const Text('English'),
-                        ]),
-                      ),
-                    ],
-                    onChanged: (val) {
-                      if (val != s.isEnglish) {
-                        RecipeApp.of(context)?.toggleLanguage();
-                      }
-                    },
+                    activeColor: AppColors.primary,
+                    onChanged: (_) =>
+                        RecipeApp.of(context)?.toggleLanguage(),
                   ),
+                  Text('🇬🇧 EN',
+                      style: TextStyle(
+                        color: s.isEnglish
+                            ? AppColors.primary
+                            : (isDark
+                            ? AppColors.darkTextGrey
+                            : AppColors.textGrey),
+                        fontWeight: s.isEnglish
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                      )),
                 ],
               ),
             ),
@@ -317,7 +414,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 showAboutDialog(
                   context: context,
                   applicationName: 'Gusto',
-                  applicationVersion: '1.0.0',
+                  applicationVersion: '1.0.7',
                   children: [Text(s.tagline)],
                 );
               },
@@ -333,11 +430,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   context: context,
                   builder: (_) => AlertDialog(
                     title: Text(s.privacy),
-                    content: SingleChildScrollView(
+                    content: const SingleChildScrollView(
                       child: Text(
-                        s.isEnglish
-                            ? 'This application was developed for users to share food recipes. Your personal data is used only for application functions and is not shared with third parties.'
-                            : 'Bu uygulama, kullanıcıların yemek tariflerini paylaşması amacıyla geliştirilmiştir. Kişisel verileriniz yalnızca uygulama işlevleri için kullanılmakta olup üçüncü şahıslarla paylaşılmamaktadır.',
+                        'Bu uygulama, kullanıcıların yemek tariflerini paylaşması amacıyla geliştirilmiştir. '
+                            'Kişisel verileriniz yalnızca uygulama işlevleri için kullanılmakta olup '
+                            'üçüncü şahıslarla paylaşılmamaktadır.',
                       ),
                     ),
                     actions: [
@@ -399,7 +496,8 @@ class _HomeScreenState extends State<HomeScreen> {
           style: TextStyle(
             color: color ??
                 (isDark ? AppColors.darkTextDark : AppColors.textDark),
-            fontWeight: color != null ? FontWeight.bold : FontWeight.normal,
+            fontWeight:
+            color != null ? FontWeight.bold : FontWeight.normal,
           )),
       onTap: onTap,
     );
@@ -430,15 +528,14 @@ class _HomeTabState extends State<_HomeTab> {
   final _recipeService = RecipeService();
   String _selectedCategory = 'all';
   String _selectedDietTag = 'all';
+  String _sortBy = 'newest';
 
   final List<Map<String, dynamic>> _categoryIcons = [
     {'key': 'all', 'label': 'Tümü', 'labelEn': 'All', 'icon': Icons.restaurant_menu},
     {'key': 'breakfast', 'label': 'Kahvaltı', 'labelEn': 'Breakfast', 'icon': Icons.free_breakfast_outlined},
     {'key': 'lunch', 'label': 'Öğle', 'labelEn': 'Lunch', 'icon': Icons.lunch_dining_outlined},
     {'key': 'dinner', 'label': 'Akşam', 'labelEn': 'Dinner', 'icon': Icons.dinner_dining_outlined},
-    {'key': 'soup', 'label': 'Çorba', 'labelEn': 'Soup', 'icon': Icons.soup_kitchen_outlined},
     {'key': 'dessert', 'label': 'Tatlı', 'labelEn': 'Dessert', 'icon': Icons.cake_outlined},
-    {'key': 'drink', 'label': 'İçecek', 'labelEn': 'Drink', 'icon': Icons.local_drink_outlined},
     {'key': 'snack', 'label': 'Atıştırmalık', 'labelEn': 'Snack', 'icon': Icons.fastfood_outlined},
     {'key': 'other', 'label': 'Diğer', 'labelEn': 'Other', 'icon': Icons.more_horiz},
   ];
@@ -510,102 +607,27 @@ class _HomeTabState extends State<_HomeTab> {
                     ),
                   ),
 
-                  Image.asset(
-                    'assets/images/recipeapplogo.png',
-                    width: 75,
-                    height: 75,
+                  // Logo + isim ortada
+                  Row(
+                    children: [
+                      Image.asset(
+                        'assets/images/recipeapplogo.png',
+                        width: 96,
+                        height: 96,
+                      ),
+                      const SizedBox(width: 8),
+
+                    ],
                   ),
 
-                  // Çarkıfelek butonu
-                  GestureDetector(
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => SpinScreen(
-                          strings: widget.strings,
-                          isGuest: widget.isGuest,
-                        ),
-                      ),
-                    ),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary,
-                        borderRadius: BorderRadius.circular(12),
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primary.withOpacity(0.3),
-                            blurRadius: 8,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.casino_outlined,
-                              color: Colors.white, size: 18),
-                          const SizedBox(width: 6),
-                          Text(
-                            s.isEnglish
-                                ? 'What to\nCook?'
-                                : 'Bugün ne\npişirsem?',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              height: 1.2,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                  // Sağ taraf boş bırakıldı (çarkıfelek butonu alt bara taşındı)
+                  const SizedBox(width: 42),
                 ],
               ),
             ),
           ),
 
-          // Karşılama
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    widget.isGuest
-                        ? (s.isEnglish ? 'Welcome 👋' : 'Hoş Geldiniz 👋')
-                        : (s.isEnglish
-                        ? 'Hello, ${FirebaseAuth.instance.currentUser?.displayName ?? 'Chef'} 👋'
-                        : 'Merhaba, ${FirebaseAuth.instance.currentUser?.displayName ?? 'Şef'} 👋'),
-                    style: TextStyle(
-                      fontSize: 13,
-                      color:
-                      isDark ? AppColors.darkTextGrey : AppColors.textGrey,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    s.isEnglish
-                        ? 'What would you like\nto cook today?'
-                        : 'Bugün ne pişirmek\nistersiniz?',
-                    style: TextStyle(
-                      fontSize: 26,
-                      fontWeight: FontWeight.w700,
-                      color:
-                      isDark ? AppColors.darkTextDark : AppColors.textDark,
-                      height: 1.2,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Kategoriler başlığı
+          // Kategoriler başlık
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
@@ -658,8 +680,8 @@ class _HomeTabState extends State<_HomeTab> {
                               boxShadow: isSelected
                                   ? [
                                 BoxShadow(
-                                  color:
-                                  AppColors.primary.withOpacity(0.3),
+                                  color: AppColors.primary
+                                      .withOpacity(0.3),
                                   blurRadius: 8,
                                   offset: const Offset(0, 4),
                                 )
@@ -712,18 +734,14 @@ class _HomeTabState extends State<_HomeTab> {
                 children: [
                   _buildDietChip(
                       'all', s.isEnglish ? '🍽️ All' : '🍽️ Hepsi', isDark),
-                  _buildDietChip(
-                      'vegetarian',
-                      s.isEnglish ? '🥦 Vegetarian' : '🥦 Vejetaryen',
-                      isDark),
+                  _buildDietChip('vegetarian',
+                      s.isEnglish ? '🥦 Vegetarian' : '🥦 Vejetaryen', isDark),
                   _buildDietChip('vegan', '🌱 Vegan', isDark),
-                  _buildDietChip('diet',
-                      s.isEnglish ? '🥗 Diet' : '🥗 Diyet', isDark),
-                  _buildDietChip('protein', '💪 Protein', isDark),
                   _buildDietChip(
-                      'carb',
-                      s.isEnglish ? '🍞 Carbs' : '🍞 Karbonhidrat',
-                      isDark),
+                      'diet', s.isEnglish ? '🥗 Diet' : '🥗 Diyet', isDark),
+                  _buildDietChip('protein', '💪 Protein', isDark),
+                  _buildDietChip('carb',
+                      s.isEnglish ? '🍞 Carbs' : '🍞 Karbonhidrat', isDark),
                 ],
               ),
             ),
@@ -741,39 +759,89 @@ class _HomeTabState extends State<_HomeTab> {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color:
-                      isDark ? AppColors.darkTextDark : AppColors.textDark,
+                      color: isDark
+                          ? AppColors.darkTextDark
+                          : AppColors.textDark,
                     ),
                   ),
-                  const Icon(Icons.star_rounded,
-                      color: Color(0xFFFFB347), size: 18),
+                  // Sıralama seçici
+                  GestureDetector(
+                    onTap: () {
+                      showModalBottomSheet(
+                        context: context,
+                        builder: (_) => SafeArea(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ListTile(
+                                title: Text(s.isEnglish ? 'Newest' : 'En Yeni'),
+                                leading: const Icon(Icons.access_time),
+                                selected: _sortBy == 'newest',
+                                selectedColor: AppColors.primary,
+                                onTap: () {
+                                  setState(() => _sortBy = 'newest');
+                                  Navigator.pop(context);
+                                },
+                              ),
+                              ListTile(
+                                title: Text(
+                                    s.isEnglish ? 'Top Rated' : 'En Yüksek Puan'),
+                                leading: const Icon(Icons.star_outline),
+                                selected: _sortBy == 'rating',
+                                selectedColor: AppColors.primary,
+                                onTap: () {
+                                  setState(() => _sortBy = 'rating');
+                                  Navigator.pop(context);
+                                },
+                              ),
+                              ListTile(
+                                title: Text(
+                                    s.isEnglish ? 'Most Liked' : 'En Çok Beğenilen'),
+                                leading: const Icon(Icons.favorite_outline),
+                                selected: _sortBy == 'favorites',
+                                selectedColor: AppColors.primary,
+                                onTap: () {
+                                  setState(() => _sortBy = 'favorites');
+                                  Navigator.pop(context);
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                    child: Row(
+                      children: [
+                        Text(
+                          s.isEnglish ? 'Sort' : 'Sırala',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: AppColors.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const Icon(Icons.keyboard_arrow_down,
+                            size: 16, color: AppColors.primary),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
           ),
 
-          // Popüler tarifler - yatay scroll
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 220,
-              child: StreamBuilder<List<RecipeModel>>(
-                stream: _selectedCategory == 'all'
-                    ? _recipeService.getTopRatedRecipes()
-                    : _recipeService.getTopRatedByCategory(_selectedCategory),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                    return Center(
-                      child: Text(
-                        s.isEnglish
-                            ? 'No rated recipes yet'
-                            : 'Henüz değerlendirilmiş tarif yok',
-                        style:
-                        const TextStyle(color: AppColors.textGrey),
-                      ),
-                    );
-                  }
-                  final recipes = snapshot.data!.take(10).toList();
-                  return ListView.builder(
+          // En popüler tarifler (yatay scroll)
+          StreamBuilder<List<RecipeModel>>(
+            stream: _recipeService.getTopRatedRecipes(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return const SliverToBoxAdapter(child: SizedBox.shrink());
+              }
+              final recipes = snapshot.data!.take(10).toList();
+              return SliverToBoxAdapter(
+                child: SizedBox(
+                  height: 200,
+                  child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     itemCount: recipes.length,
@@ -785,14 +853,13 @@ class _HomeTabState extends State<_HomeTab> {
                           MaterialPageRoute(
                             builder: (_) => RecipeDetailScreen(
                               recipe: recipe,
-                              isGuest: widget.isGuest,
                               isAdmin: widget.isAdmin,
                               strings: widget.strings,
                             ),
                           ),
                         ),
                         child: Container(
-                          width: 160,
+                          width: 150,
                           margin: const EdgeInsets.only(right: 12),
                           decoration: BoxDecoration(
                             color: isDark
@@ -848,23 +915,16 @@ class _HomeTabState extends State<_HomeTab> {
                                             size: 13),
                                         const SizedBox(width: 4),
                                         Text(
-                                          recipe.averageRating.toStringAsFixed(1),
+                                          recipe.averageRating
+                                              .toStringAsFixed(1),
                                           style: TextStyle(
                                             fontSize: 12,
                                             fontWeight: FontWeight.w600,
-                                            color: isDark ? AppColors.darkTextGrey : AppColors.textGrey,
+                                            color: isDark
+                                                ? AppColors.darkTextGrey
+                                                : AppColors.textGrey,
                                           ),
                                         ),
-                                        if (recipe.ratingCount > 0) ...[
-                                          const SizedBox(width: 2),
-                                          Text(
-                                            '(${recipe.ratingCount})',
-                                            style: TextStyle(
-                                              fontSize: 11,
-                                              color: isDark ? AppColors.darkTextGrey : AppColors.textGrey,
-                                            ),
-                                          ),
-                                        ],
                                         const SizedBox(width: 8),
                                         Icon(Icons.access_time_outlined,
                                             size: 12,
@@ -891,10 +951,10 @@ class _HomeTabState extends State<_HomeTab> {
                         ),
                       );
                     },
-                  );
-                },
-              ),
-            ),
+                  ),
+                ),
+              );
+            },
           ),
 
           // Son Tarifler başlık
@@ -909,8 +969,9 @@ class _HomeTabState extends State<_HomeTab> {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color:
-                      isDark ? AppColors.darkTextDark : AppColors.textDark,
+                      color: isDark
+                          ? AppColors.darkTextDark
+                          : AppColors.textDark,
                     ),
                   ),
                   Text(
@@ -933,33 +994,68 @@ class _HomeTabState extends State<_HomeTab> {
                 : _recipeService.getRecipesByCategory(_selectedCategory),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const SliverFillRemaining(
-                  child: Center(child: CircularProgressIndicator()),
-                );
-              }
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                return SliverFillRemaining(
+                return const SliverToBoxAdapter(
                   child: Center(
-                    child: Text(s.noRecipes,
-                        style:
-                        const TextStyle(color: AppColors.textGrey)),
+                    child: Padding(
+                      padding: EdgeInsets.all(32),
+                      child: CircularProgressIndicator(),
+                    ),
                   ),
                 );
               }
 
-              var recipes = snapshot.data!;
+              var recipes = snapshot.data ?? [];
 
+              // Diyet filtresi
               if (_selectedDietTag != 'all') {
                 recipes = recipes
                     .where((r) => r.dietTags.contains(_selectedDietTag))
                     .toList();
               }
 
-              return SliverPadding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                        (context, index) => RecipeCard(
+              // Sıralama
+              if (_sortBy == 'rating') {
+                recipes.sort((a, b) =>
+                    b.averageRating.compareTo(a.averageRating));
+              } else if (_sortBy == 'favorites') {
+                recipes.sort(
+                        (a, b) => b.favoriteCount.compareTo(a.favoriteCount));
+              } else {
+                recipes.sort(
+                        (a, b) => b.createdAt.compareTo(a.createdAt));
+              }
+
+              if (recipes.isEmpty) {
+                return SliverToBoxAdapter(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(48),
+                      child: Column(
+                        children: [
+                          Icon(Icons.restaurant_menu,
+                              size: 64,
+                              color: isDark
+                                  ? AppColors.darkTextGrey
+                                  : AppColors.textGrey),
+                          const SizedBox(height: 16),
+                          Text(
+                            s.noRecipes,
+                            style: TextStyle(
+                                color: isDark
+                                    ? AppColors.darkTextGrey
+                                    : AppColors.textGrey),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }
+
+              return SliverList(
+                delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                    return RecipeCard(
                       recipe: recipes[index],
                       isEnglish: s.isEnglish,
                       onTap: () => Navigator.push(
@@ -976,9 +1072,9 @@ class _HomeTabState extends State<_HomeTab> {
                       onDelete: widget.isAdmin
                           ? () => _adminDelete(recipes[index].id)
                           : null,
-                    ),
-                    childCount: recipes.length,
-                  ),
+                    );
+                  },
+                  childCount: recipes.length,
                 ),
               );
             },
@@ -1024,8 +1120,11 @@ class _HomeTabState extends State<_HomeTab> {
             style: TextStyle(
               color: isSelected
                   ? AppColors.primary
-                  : (isDark ? AppColors.darkTextGrey : AppColors.textGrey),
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  : (isDark
+                  ? AppColors.darkTextGrey
+                  : AppColors.textGrey),
+              fontWeight:
+              isSelected ? FontWeight.bold : FontWeight.normal,
               fontSize: 12,
             ),
           ),

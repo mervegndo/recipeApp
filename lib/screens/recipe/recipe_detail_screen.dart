@@ -8,7 +8,6 @@ import '../../models/recipe_model.dart';
 import '../../services/recipe_service.dart';
 import '../../utils/app_constants.dart';
 import 'edit_recipe_screen.dart';
-import '../recipe/user_recipes_screen.dart';
 
 class RecipeDetailScreen extends StatefulWidget {
   final RecipeModel recipe;
@@ -31,14 +30,25 @@ class RecipeDetailScreen extends StatefulWidget {
 class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
   final _recipeService = RecipeService();
   final _commentController = TextEditingController();
+
   bool _isFavorite = false;
   bool _isOwner = false;
   double _userRating = 0;
 
+  // Kişi sayısı scaler
+  late int _currentServings;
+
+  // Tarif sahibinin profil bilgileri
+  String? _ownerDisplayName;
+  String? _ownerPhotoUrl;
+  bool _ownerLoading = true;
+
   @override
   void initState() {
     super.initState();
+    _currentServings = widget.recipe.servings > 0 ? widget.recipe.servings : 1;
     _checkFavoriteAndOwnership();
+    _loadOwnerProfile();
   }
 
   @override
@@ -58,7 +68,30 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
     if (doc.exists) {
       final favorites =
       List<String>.from(doc.data()?['favoriteRecipeIds'] ?? []);
-      setState(() => _isFavorite = favorites.contains(widget.recipe.id));
+      if (mounted) {
+        setState(() => _isFavorite = favorites.contains(widget.recipe.id));
+      }
+    }
+  }
+
+  Future<void> _loadOwnerProfile() async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.recipe.userId)
+          .get();
+      if (doc.exists && mounted) {
+        final data = doc.data()!;
+        setState(() {
+          _ownerDisplayName = data['displayName'] as String?;
+          _ownerPhotoUrl = data['photoUrl'] as String?;
+          _ownerLoading = false;
+        });
+      } else if (mounted) {
+        setState(() => _ownerLoading = false);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _ownerLoading = false);
     }
   }
 
@@ -71,7 +104,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
     if (user == null) return;
     await _recipeService.toggleFavorite(
         user.uid, widget.recipe.id, _isFavorite);
-    setState(() => _isFavorite = !_isFavorite);
+    if (mounted) setState(() => _isFavorite = !_isFavorite);
   }
 
   void _showGuestWarning() {
@@ -105,13 +138,13 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
       recipeId: widget.recipe.id,
       userId: user.uid,
       userEmail: user.email ?? '',
-      userName: user.displayName ?? 'Kullanıcı',
+      userName: user.displayName ?? user.email?.split('@').first ?? '',
       text: _commentController.text.trim(),
       rating: _userRating,
     );
 
     _commentController.clear();
-    setState(() => _userRating = 0);
+    if (mounted) setState(() => _userRating = 0);
 
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -146,17 +179,52 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
     }
   }
 
+  // Malzeme miktarını kişi sayısına göre ölçekle
+  String _scaleIngredient(String ingredient) {
+    final baseServings =
+    widget.recipe.servings > 0 ? widget.recipe.servings : 1;
+    if (_currentServings == baseServings) return ingredient;
+
+    final ratio = _currentServings / baseServings;
+
+    // Sayı + birim formatını bul ve ölçekle (örn: "200g", "2 tbsp", "3 adet")
+    return ingredient.replaceAllMapped(
+      RegExp(r'(\d+(?:[.,]\d+)?)'),
+          (match) {
+        final original = double.tryParse(
+            match.group(1)!.replaceAll(',', '.'));
+        if (original == null) return match.group(0)!;
+        final scaled = original * ratio;
+        // Tam sayıysa tam göster, değilse 1 ondalık
+        if (scaled == scaled.roundToDouble()) {
+          return scaled.toInt().toString();
+        } else {
+          return scaled.toStringAsFixed(1);
+        }
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final recipe = widget.recipe;
     final s = widget.strings;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    final textColor =
+    isDark ? AppColors.darkTextDark : AppColors.textDark;
+    final subColor =
+    isDark ? AppColors.darkTextGrey : AppColors.textGrey;
+    final cardColor = isDark ? AppColors.darkCard : Colors.white;
+    final surfaceColor =
+    isDark ? AppColors.darkSurface : AppColors.surfaceContainer;
+
     return Scaffold(
       body: CustomScrollView(
         slivers: [
+          // ---- Büyük fotoğraf header ----
           SliverAppBar(
-            expandedHeight: 260,
+            expandedHeight: 280,
             pinned: true,
             actions: [
               IconButton(
@@ -180,7 +248,8 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                 ),
               if (_isOwner || widget.isAdmin)
                 IconButton(
-                  icon: const Icon(Icons.delete_outline, color: Colors.white),
+                  icon:
+                  const Icon(Icons.delete_outline, color: Colors.white),
                   onPressed: _deleteRecipe,
                 ),
             ],
@@ -189,19 +258,20 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                   ? CachedNetworkImage(
                 imageUrl: recipe.imageUrl!,
                 fit: BoxFit.cover,
-                errorWidget: (_, __, ___) => _placeholderHeader(),
+                errorWidget: (_, __, ___) => _placeholderHeader(isDark),
               )
-                  : _placeholderHeader(),
+                  : _placeholderHeader(isDark),
             ),
           ),
 
+          // ---- İçerik ----
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Kategori
+                  // Kategori etiketi
                   Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 5),
@@ -214,18 +284,25 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                     child: Text(
                       '${AppCategories.getEmojiByKey(recipe.category)} ${AppCategories.getLabelByKey(recipe.category, isEnglish: s.isEnglish)}',
                       style: TextStyle(
-                        color: AppColors.categoryColors[recipe.category] ??
+                        color:
+                        AppColors.categoryColors[recipe.category] ??
                             AppColors.textGrey,
                         fontWeight: FontWeight.w600,
+                        fontSize: 13,
                       ),
                     ),
                   ),
                   const SizedBox(height: 12),
 
                   // Başlık
-                  Text(recipe.title,
-                      style: const TextStyle(
-                          fontSize: 24, fontWeight: FontWeight.bold)),
+                  Text(
+                    recipe.title,
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: textColor,
+                    ),
+                  ),
                   const SizedBox(height: 8),
 
                   // Puan
@@ -246,53 +323,61 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                         recipe.ratingCount > 0
                             ? '${recipe.averageRating.toStringAsFixed(1)} (${s.ratingCount(recipe.ratingCount)})'
                             : s.noRating,
-                        style: const TextStyle(
-                            color: AppColors.textGrey, fontSize: 13),
+                        style: TextStyle(color: subColor, fontSize: 13),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 16),
 
-                  // Süre, porsiyon, zorluk, kalori
+                  // Süre / Porsiyon / Zorluk / Kalori kutusu
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: isDark ? AppColors.darkCard : Colors.white,
+                      color: surfaceColor,
                       borderRadius: BorderRadius.circular(16),
-                      boxShadow: isDark
-                          ? []
-                          : [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.05),
-                          blurRadius: 8,
-                        )
-                      ],
+                      border: Border.all(
+                        color: isDark
+                            ? const Color(0xFF3D3530)
+                            : AppColors.outline,
+                      ),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
                         _infoBox(
-                            Icons.access_time_outlined,
-                            '${recipe.cookingTimeMinutes} ${s.isEnglish ? 'min' : 'dk'}',
-                            s.duration),
-                        _divider(),
+                          Icons.access_time_outlined,
+                          '${recipe.cookingTimeMinutes} ${s.isEnglish ? 'min' : 'dk'}',
+                          s.duration,
+                          textColor: textColor,
+                          subColor: subColor,
+                        ),
+                        _vDivider(isDark),
                         _infoBox(
-                            Icons.people_outline,
-                            '${recipe.servings} ${s.isEnglish ? 'serv.' : 'kişi'}',
-                            s.servings),
-                        _divider(),
+                          Icons.people_outline,
+                          '${recipe.servings} ${s.isEnglish ? 'serv.' : 'kişi'}',
+                          s.servings,
+                          textColor: textColor,
+                          subColor: subColor,
+                        ),
+                        _vDivider(isDark),
                         _infoBox(
-                            Icons.bar_chart,
-                            _difficultyLabel(recipe.difficulty),
-                            s.difficulty,
-                            color: _difficultyColor(recipe.difficulty)),
+                          Icons.bar_chart,
+                          _difficultyLabel(recipe.difficulty, s),
+                          s.difficulty,
+                          textColor: _difficultyColor(recipe.difficulty),
+                          subColor: subColor,
+                          iconColor: _difficultyColor(recipe.difficulty),
+                        ),
                         if (recipe.calories != null) ...[
-                          _divider(),
+                          _vDivider(isDark),
                           _infoBox(
-                              Icons.local_fire_department_outlined,
-                              '${recipe.calories} kcal',
-                              s.calories,
-                              color: Colors.orange),
+                            Icons.local_fire_department_outlined,
+                            '${recipe.calories} kcal',
+                            s.calories,
+                            textColor: Colors.orange,
+                            subColor: subColor,
+                            iconColor: Colors.orange,
+                          ),
                         ],
                       ],
                     ),
@@ -304,9 +389,8 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                     Wrap(
                       spacing: 8,
                       runSpacing: 4,
-                      children: recipe.dietTags
-                          .map((tag) => _dietTag(tag, s))
-                          .toList(),
+                      children:
+                      recipe.dietTags.map((tag) => _dietTag(tag, s)).toList(),
                     ),
                     const SizedBox(height: 12),
                   ],
@@ -318,68 +402,85 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                       const SizedBox(width: 4),
                       Text(
                         s.favoriteCount(recipe.favoriteCount),
-                        style: const TextStyle(
-                            color: AppColors.textGrey, fontSize: 13),
+                        style: TextStyle(color: subColor, fontSize: 13),
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
 
-                  // ── Tarifi yükleyen kullanıcı (tıklanabilir kart) ──
-                  _buildAuthorCard(recipe, s, isDark),
-                  const SizedBox(height: 16),
+                  // ---- Tarif sahibi kartı ----
+                  _buildOwnerCard(isDark, textColor, subColor, cardColor),
+                  const SizedBox(height: 20),
 
-                  // Açıklama
-                  Text(recipe.description,
-                      style: const TextStyle(
-                          fontSize: 15,
-                          color: AppColors.textDark,
-                          height: 1.5)),
-                  const SizedBox(height: 24),
-
-                  // Malzemeler
-                  _buildSection(
-                    title:
-                    '🥕 ${s.ingredients} (${recipe.ingredients.length})',
-                    children: recipe.ingredients
-                        .map((i) => _buildBulletItem(i))
-                        .toList(),
+                  // ---- Açıklama ----
+                  Text(
+                    recipe.description,
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: textColor,
+                      height: 1.6,
+                    ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 28),
 
-                  // Yapılış
-                  _buildSection(
-                    title: '👨‍🍳 ${s.steps}',
-                    children: recipe.steps.asMap().entries.map((e) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            CircleAvatar(
-                              radius: 14,
-                              backgroundColor:
-                              AppColors.primary.withOpacity(0.1),
-                              child: Text('${e.key + 1}',
-                                  style: const TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.primary,
-                                      fontWeight: FontWeight.bold)),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(e.value,
-                                  style: const TextStyle(
-                                      fontSize: 14, height: 1.5)),
-                            ),
-                          ],
-                        ),
-                      );
-                    }).toList(),
+                  // ---- Kişi sayısı scaler ----
+                  _buildServingsScaler(s, isDark, textColor, subColor, cardColor),
+                  const SizedBox(height: 20),
+
+                  // ---- Malzemeler ----
+                  _buildSectionTitle(
+                    '🥕 ${s.ingredients} ($_currentServings ${s.isEnglish ? 'servings' : 'kişi için'})',
+                    textColor,
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 12),
+                  ...recipe.ingredients
+                      .map((i) => _buildBulletItem(
+                    _scaleIngredient(i),
+                    isDark,
+                    textColor,
+                  ))
+                      .toList(),
+                  const SizedBox(height: 28),
 
-                  _buildCommentsSection(s),
+                  // ---- Yapılış ----
+                  _buildSectionTitle('👨‍🍳 ${s.steps}', textColor),
+                  const SizedBox(height: 12),
+                  ...recipe.steps.asMap().entries.map((e) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 14),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          CircleAvatar(
+                            radius: 14,
+                            backgroundColor:
+                            AppColors.primary.withOpacity(0.12),
+                            child: Text(
+                              '${e.key + 1}',
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              e.value,
+                              style: TextStyle(
+                                  fontSize: 14,
+                                  height: 1.5,
+                                  color: textColor),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                  const SizedBox(height: 28),
+
+                  // ---- Yorumlar ----
+                  _buildCommentsSection(s, isDark, textColor, subColor, cardColor),
                 ],
               ),
             ),
@@ -389,117 +490,214 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
     );
   }
 
-  // ── Yazar kartı: profil fotoğrafı + isim + tıklanabilir ──
-  Widget _buildAuthorCard(RecipeModel recipe, AppStrings s, bool isDark) {
-    return FutureBuilder<DocumentSnapshot>(
-      future: FirebaseFirestore.instance
-          .collection('users')
-          .doc(recipe.userId)
-          .get(),
-      builder: (context, snap) {
-        final data = snap.data?.data() as Map<String, dynamic>?;
-        final photoUrl = data?['photoUrl'] as String?;
-        final displayName =
-            data?['displayName'] as String? ?? recipe.userEmail;
-
-        return GestureDetector(
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => UserRecipesScreen(
-                userId: recipe.userId,
-                userName: displayName,
-                userPhotoUrl: photoUrl,
-                strings: widget.strings,
-                isGuest: widget.isGuest,
+  // ---- Kişi sayısı ayarlayıcı ----
+  Widget _buildServingsScaler(
+      AppStrings s,
+      bool isDark,
+      Color textColor,
+      Color subColor,
+      Color cardColor,
+      ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? const Color(0xFF3D3530) : AppColors.outline,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.people_outline, color: AppColors.primary, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              s.isEnglish ? 'Adjust servings' : 'Kişi sayısını ayarla',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                color: textColor,
               ),
             ),
           ),
-          child: Container(
-            padding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: isDark
-                  ? AppColors.darkCard
-                  : AppColors.surfaceContainer,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: isDark
-                    ? const Color(0xFF3D3530)
-                    : AppColors.outline,
+          // Azalt butonu
+          GestureDetector(
+            onTap: () {
+              if (_currentServings > 1) {
+                setState(() => _currentServings--);
+              }
+            },
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: _currentServings > 1
+                    ? AppColors.primary
+                    : AppColors.primary.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.remove, color: Colors.white, size: 18),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Text(
+              '$_currentServings',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.primary,
               ),
             ),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 22,
-                  backgroundColor: AppColors.primary,
-                  backgroundImage: photoUrl != null
-                      ? NetworkImage(photoUrl)
-                      : null,
-                  child: photoUrl == null
-                      ? Text(
-                    displayName.isNotEmpty
-                        ? displayName[0].toUpperCase()
-                        : '?',
-                    style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 18),
-                  )
-                      : null,
+          ),
+          // Artır butonu
+          GestureDetector(
+            onTap: () {
+              if (_currentServings < 50) {
+                setState(() => _currentServings++);
+              }
+            },
+            child: Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Icon(Icons.add, color: Colors.white, size: 18),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ---- Tarif sahibi kartı ----
+  Widget _buildOwnerCard(
+      bool isDark,
+      Color textColor,
+      Color subColor,
+      Color cardColor,
+      ) {
+    final displayName = _ownerDisplayName?.isNotEmpty == true
+        ? _ownerDisplayName!
+        : widget.recipe.userEmail.split('@').first;
+    final avatarLetter = displayName.isNotEmpty
+        ? displayName[0].toUpperCase()
+        : '?';
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? const Color(0xFF3D3530) : AppColors.outline,
+        ),
+      ),
+      child: Row(
+        children: [
+          // Avatar — fotoğraf varsa göster, yoksa gradient harf
+          ClipOval(
+            child: _ownerLoading
+                ? Container(
+              width: 48,
+              height: 48,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [AppColors.primary, Color(0xFFFF8C69)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        displayName,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
-                          color: isDark
-                              ? AppColors.darkTextDark
-                              : AppColors.textDark,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        s.isEnglish
-                            ? 'Tap to see all recipes'
-                            : 'Tüm tarifleri görmek için tıkla',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: isDark
-                              ? AppColors.darkTextGrey
-                              : AppColors.textGrey,
-                        ),
-                      ),
-                    ],
+              ),
+              child: const Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    color: Colors.white,
+                    strokeWidth: 2,
                   ),
                 ),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  color: isDark
-                      ? AppColors.darkTextGrey
-                      : AppColors.textGrey,
+              ),
+            )
+                : (_ownerPhotoUrl != null && _ownerPhotoUrl!.isNotEmpty)
+                ? CachedNetworkImage(
+              imageUrl: _ownerPhotoUrl!,
+              width: 48,
+              height: 48,
+              fit: BoxFit.cover,
+              errorWidget: (_, __, ___) =>
+                  _avatarFallback(avatarLetter),
+            )
+                : _avatarFallback(avatarLetter),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  displayName,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                    color: textColor,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  widget.strings.isEnglish
+                      ? 'Tap to see all recipes'
+                      : 'Tüm tarifleri görmek için tıkla',
+                  style: TextStyle(fontSize: 12, color: subColor),
                 ),
               ],
             ),
           ),
-        );
-      },
+          Icon(Icons.arrow_forward_ios, size: 14, color: subColor),
+        ],
+      ),
     );
   }
 
-  Widget _buildCommentsSection(AppStrings s) {
+  Widget _avatarFallback(String letter) {
+    return Container(
+      width: 48,
+      height: 48,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [AppColors.primary, Color(0xFFFF8C69)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Center(
+        child: Text(
+          letter,
+          style: const TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ---- Yorumlar bölümü ----
+  Widget _buildCommentsSection(
+      AppStrings s,
+      bool isDark,
+      Color textColor,
+      Color subColor,
+      Color cardColor,
+      ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('💬 ${s.comments}',
-            style: const TextStyle(
-                fontSize: 18, fontWeight: FontWeight.bold)),
+        _buildSectionTitle('💬 ${s.comments}', textColor),
         const SizedBox(height: 16),
 
         // Misafir uyarısı
@@ -523,7 +721,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      widget.strings.isEnglish
+                      s.isEnglish
                           ? 'Login to leave a comment and rate this recipe'
                           : 'Yorum yapmak ve puan vermek için giriş yapın',
                       style: const TextStyle(
@@ -541,15 +739,17 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
           ),
         ],
 
-        // Giriş yapmış kullanıcı için yorum formu
+        // Yorum formu
         if (!widget.isGuest) ...[
           Row(
             children: [
               Text(s.yourRating,
-                  style: const TextStyle(fontWeight: FontWeight.w600)),
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600, color: textColor)),
               ...List.generate(5, (i) {
                 return GestureDetector(
-                  onTap: () => setState(() => _userRating = i + 1.0),
+                  onTap: () =>
+                      setState(() => _userRating = i + 1.0),
                   child: Icon(
                     i < _userRating
                         ? Icons.star_rounded
@@ -562,13 +762,16 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
             ],
           ),
           const SizedBox(height: 12),
-
           Row(
             children: [
               Expanded(
                 child: TextField(
                   controller: _commentController,
-                  decoration: InputDecoration(hintText: s.writeComment),
+                  style: TextStyle(color: textColor),
+                  decoration: InputDecoration(
+                    hintText: s.writeComment,
+                    hintStyle: TextStyle(color: subColor),
+                  ),
                   maxLines: 2,
                 ),
               ),
@@ -591,8 +794,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Text(s.noComments,
-                      style: const TextStyle(
-                          color: AppColors.textGrey)),
+                      style: TextStyle(color: subColor)),
                 ),
               );
             }
@@ -603,52 +805,79 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                 final isCommentOwner =
                     FirebaseAuth.instance.currentUser?.uid ==
                         data['userId'];
+                final commentName = (data['userName'] as String?)
+                    ?.isNotEmpty ==
+                    true
+                    ? data['userName'] as String
+                    : (data['userEmail'] as String? ?? '')
+                    .split('@')
+                    .first;
+                final commentLetter = commentName.isNotEmpty
+                    ? commentName[0].toUpperCase()
+                    : '?';
+                final rating = (data['rating'] ?? 0).toDouble();
 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).brightness == Brightness.dark
-                        ? AppColors.darkCard
-                        : Colors.white,
+                    color: cardColor,
                     borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
-                        blurRadius: 6,
-                      )
-                    ],
+                    border: Border.all(
+                      color: isDark
+                          ? const Color(0xFF3D3530)
+                          : AppColors.outline,
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          CircleAvatar(
-                            radius: 16,
-                            backgroundColor:
-                            AppColors.primary.withOpacity(0.1),
-                            child: Text(
-                              (data['userName'] ?? 'U')[0].toUpperCase(),
-                              style: const TextStyle(
-                                  color: AppColors.primary,
-                                  fontWeight: FontWeight.bold),
+                          // Yorum sahibi avatarı
+                          Container(
+                            width: 34,
+                            height: 34,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              gradient: const LinearGradient(
+                                colors: [
+                                  AppColors.primary,
+                                  Color(0xFFFF8C69)
+                                ],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                            ),
+                            child: Center(
+                              child: Text(
+                                commentLetter,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
                             ),
                           ),
-                          const SizedBox(width: 8),
+                          const SizedBox(width: 10),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(data['userName'] ?? 'Kullanıcı',
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 13)),
+                                Text(
+                                  commentName,
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                    color: textColor,
+                                  ),
+                                ),
                                 Row(
                                   children: List.generate(
                                     5,
                                         (i) => Icon(
-                                      i < (data['rating'] ?? 0)
+                                      i < rating.round()
                                           ? Icons.star_rounded
                                           : Icons.star_outline_rounded,
                                       color: Colors.amber,
@@ -663,15 +892,22 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                             IconButton(
                               icon: const Icon(Icons.delete_outline,
                                   color: Colors.red, size: 18),
-                              onPressed: () =>
-                                  _recipeService.deleteComment(
-                                      widget.recipe.id, doc.id),
+                              onPressed: () => _recipeService.deleteComment(
+                                  widget.recipe.id, doc.id),
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
                             ),
                         ],
                       ),
                       const SizedBox(height: 8),
-                      Text(data['text'] ?? '',
-                          style: const TextStyle(fontSize: 14)),
+                      Text(
+                        data['text'] ?? '',
+                        style: TextStyle(
+                          fontSize: 14,
+                          color: textColor,
+                          height: 1.4,
+                        ),
+                      ),
                     ],
                   ),
                 );
@@ -684,69 +920,91 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
     );
   }
 
-  Widget _buildSection(
-      {required String title, required List<Widget> children}) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title,
-            style: const TextStyle(
-                fontSize: 18, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 12),
-        ...children,
-      ],
+  // ---- Yardımcı widgetlar ----
+
+  Widget _buildSectionTitle(String title, Color textColor) {
+    return Text(
+      title,
+      style: TextStyle(
+        fontSize: 18,
+        fontWeight: FontWeight.bold,
+        color: textColor,
+      ),
     );
   }
 
-  Widget _buildBulletItem(String text) {
+  Widget _buildBulletItem(String text, bool isDark, Color textColor) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: const BoxDecoration(
-                color: AppColors.primary, shape: BoxShape.circle),
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Container(
+              width: 8,
+              height: 8,
+              decoration: const BoxDecoration(
+                  color: AppColors.primary, shape: BoxShape.circle),
+            ),
           ),
           const SizedBox(width: 12),
           Expanded(
-              child: Text(text, style: const TextStyle(fontSize: 14))),
+            child: Text(
+              text,
+              style: TextStyle(fontSize: 14, color: textColor, height: 1.4),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _placeholderHeader() {
+  Widget _placeholderHeader(bool isDark) {
     return Container(
-      color: const Color(0xFFF5F0EA),
-      child: const Center(
-          child: Icon(Icons.restaurant,
-              size: 80, color: AppColors.textGrey)),
+      color: isDark ? AppColors.darkCard : const Color(0xFFF5F0EA),
+      child: Center(
+        child: Icon(Icons.restaurant,
+            size: 80,
+            color: isDark ? AppColors.darkTextGrey : AppColors.textGrey),
+      ),
     );
   }
 
-  Widget _infoBox(IconData icon, String value, String label,
-      {Color? color}) {
+  Widget _infoBox(
+      IconData icon,
+      String value,
+      String label, {
+        required Color textColor,
+        required Color subColor,
+        Color? iconColor,
+      }) {
     return Column(
       children: [
-        Icon(icon, color: color ?? AppColors.primary, size: 22),
+        Icon(icon, color: iconColor ?? AppColors.primary, size: 22),
         const SizedBox(height: 4),
-        Text(value,
-            style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
-                color: color ?? AppColors.textDark)),
-        Text(label,
-            style: const TextStyle(
-                fontSize: 11, color: AppColors.textGrey)),
+        Text(
+          value,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 13,
+            color: textColor,
+          ),
+        ),
+        Text(
+          label,
+          style: TextStyle(fontSize: 11, color: subColor),
+        ),
       ],
     );
   }
 
-  Widget _divider() {
+  Widget _vDivider(bool isDark) {
     return Container(
-        width: 1, height: 40, color: const Color(0xFFE0E0E0));
+      width: 1,
+      height: 40,
+      color: isDark ? const Color(0xFF3D3530) : const Color(0xFFE0E0E0),
+    );
   }
 
   Widget _dietTag(String tag, AppStrings s) {
@@ -760,17 +1018,23 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: AppColors.secondary.withOpacity(0.1),
+        color: AppColors.primary.withOpacity(0.08),
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withOpacity(0.2)),
       ),
-      child: Text(labels[tag] ?? tag,
-          style: const TextStyle(fontSize: 12)),
+      child: Text(
+        labels[tag] ?? tag,
+        style: const TextStyle(
+          color: AppColors.primary,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
     );
   }
 
-  String _difficultyLabel(String difficulty) {
-    final s = widget.strings;
-    switch (difficulty) {
+  String _difficultyLabel(String d, AppStrings s) {
+    switch (d) {
       case 'easy':
         return s.easy;
       case 'hard':
@@ -780,14 +1044,14 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
     }
   }
 
-  Color _difficultyColor(String difficulty) {
-    switch (difficulty) {
+  Color _difficultyColor(String d) {
+    switch (d) {
       case 'easy':
-        return Colors.green;
+        return const Color(0xFF2E7D32);
       case 'hard':
-        return Colors.red;
+        return const Color(0xFFBA1A1A);
       default:
-        return Colors.orange;
+        return const Color(0xFFE65100);
     }
   }
 }
