@@ -298,7 +298,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Image.asset(
-                    'assets/images/recipeapplogo.png',
+                    'assets/images/recipeapplogo_white.png',
                     width: 128,
                     height: 128,
                   ),
