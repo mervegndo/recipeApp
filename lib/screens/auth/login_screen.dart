@@ -166,17 +166,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     children: [
                       Image.asset(
                         'assets/images/recipeapplogo.png',
-                        width: 140,
-                        height: 140,
+                        width: 200,
+                        height: 200,
                       ),
                       const SizedBox(height: 16),
-                      const Text(
-                        'Lezzet Rehberi',
-                        style: TextStyle(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary),
-                      ),
                       Text(
                         widget.strings.tagline,
                         style: TextStyle(
