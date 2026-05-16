@@ -5,12 +5,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:translator/translator.dart';
 import '../../models/recipe_model.dart';
 import '../../services/recipe_service.dart';
 import '../../services/imgbb_service.dart';
 import '../../utils/app_constants.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:translator/translator.dart';
 
 class AddRecipeScreen extends StatefulWidget {
   final AppStrings strings;
@@ -23,39 +23,42 @@ class AddRecipeScreen extends StatefulWidget {
 class _AddRecipeScreenState extends State<AddRecipeScreen> {
   final _formKey = GlobalKey<FormState>();
   final _recipeService = RecipeService();
+
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _ingredientController = TextEditingController();
   final _amountController = TextEditingController();
-  String _selectedUnit = 'cup';
-
-  final List<Map<String, String>> _unitOptions = [
-    {'key': 'tsp', 'en': 'tsp', 'tr': 'çay kaşığı'},
-    {'key': 'tbsp', 'en': 'tbsp', 'tr': 'yemek kaşığı'},
-    {'key': 'cup', 'en': 'cup', 'tr': 'bardak'},
-    {'key': 'glass', 'en': 'glass', 'tr': 'su bardağı'},
-    {'key': 'piece', 'en': 'piece', 'tr': 'adet'},
-    {'key': 'g', 'en': 'g', 'tr': 'g'},
-    {'key': 'kg', 'en': 'kg', 'tr': 'kg'},
-    {'key': 'ml', 'en': 'ml', 'tr': 'ml'},
-    {'key': 'L', 'en': 'L', 'tr': 'L'},
-    {'key': 'pinch', 'en': 'pinch', 'tr': 'tutam'},
-  ];
   final _stepController = TextEditingController();
   final _cookingTimeController = TextEditingController();
   final _servingsController = TextEditingController();
   final _caloriesController = TextEditingController();
+  final _ingredientFocusNode = FocusNode();
+  final translator = GoogleTranslator();
 
+  String _selectedUnit = 'cup';
   String _selectedCategory = 'breakfast';
   String _selectedDifficulty = 'medium';
+
   final List<String> _ingredients = [];
   final List<String> _steps = [];
   final List<String> _selectedDietTags = [];
+
   File? _imageFile;
   Uint8List? _imageBytes;
   bool _isLoading = false;
-  final _ingredientFocusNode = FocusNode();
-  final translator = GoogleTranslator();
+
+  final List<Map<String, String>> _unitOptions = [
+    {'key': 'tsp',  'en': 'tsp',          'tr': 'çay kaşığı'},
+    {'key': 'tbsp', 'en': 'tbsp',         'tr': 'yemek kaşığı'},
+    {'key': 'cup',  'en': 'cup',          'tr': 'bardak'},
+    {'key': 'glass','en': 'glass',        'tr': 'su bardağı'},
+    {'key': 'piece','en': 'piece',        'tr': 'adet'},
+    {'key': 'g',    'en': 'g',            'tr': 'g'},
+    {'key': 'kg',   'en': 'kg',           'tr': 'kg'},
+    {'key': 'ml',   'en': 'ml',           'tr': 'ml'},
+    {'key': 'L',    'en': 'L',            'tr': 'L'},
+    {'key': 'pinch','en': 'pinch',        'tr': 'tutam'},
+  ];
 
   @override
   void dispose() {
@@ -71,6 +74,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
     super.dispose();
   }
 
+  // ─── Görsel seç ──────────────────────────────────────────────────────────
   Future<void> _pickImage() async {
     final picker = ImagePicker();
     final picked = await picker.pickImage(
@@ -85,6 +89,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
     }
   }
 
+  // ─── Malzeme ekle ─────────────────────────────────────────────────────────
   Future<void> _addIngredient() async {
     final ingredientName = _ingredientController.text.trim();
     if (ingredientName.isEmpty) return;
@@ -103,19 +108,14 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
       _selectedUnit = 'cup';
     });
 
+    // Malzemeyi ingredients koleksiyonuna da ekle (autocomplete için)
     try {
-      final ingredientRef =
-      FirebaseFirestore.instance.collection('ingredients');
+      final ingredientRef = FirebaseFirestore.instance.collection('ingredients');
 
-      final translationToEn = await translator.translate(
-        ingredientName,
-        to: 'en',
-      );
-
-      final translationToTr = await translator.translate(
-        ingredientName,
-        to: 'tr',
-      );
+      final translationToEn =
+      await translator.translate(ingredientName, to: 'en');
+      final translationToTr =
+      await translator.translate(ingredientName, to: 'tr');
 
       final ingredientEn = translationToEn.text.toLowerCase();
       final ingredientTr = translationToTr.text.toLowerCase();
@@ -140,6 +140,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
     }
   }
 
+  // ─── Adım ekle ────────────────────────────────────────────────────────────
   void _addStep() {
     final text = _stepController.text.trim();
     if (text.isNotEmpty) {
@@ -150,6 +151,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
     }
   }
 
+  // ─── Diyet etiketi toggle ─────────────────────────────────────────────────
   void _toggleDietTag(String tag) {
     setState(() {
       if (_selectedDietTags.contains(tag)) {
@@ -160,6 +162,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
     });
   }
 
+  // ─── Tarifi kaydet ────────────────────────────────────────────────────────
   Future<void> _saveRecipe() async {
     if (!_formKey.currentState!.validate()) return;
     if (_ingredients.isEmpty) {
@@ -180,6 +183,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
     try {
       final user = FirebaseAuth.instance.currentUser!;
 
+      // Görsel yükle
       String? imageUrl;
       if (kIsWeb && _imageBytes != null) {
         imageUrl = await ImgBBService.uploadImageBytes(_imageBytes!);
@@ -187,12 +191,40 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
         imageUrl = await ImgBBService.uploadImage(_imageFile!);
       }
 
+      // ── Arama index alanlarını oluştur ────────────────────────────────────
+      final isEn = widget.strings.isEnglish;
+      final rawTitle = _titleController.text.trim();
+      final rawDescription = _descriptionController.text.trim();
+      final rawIngredients = _ingredients.join(' ');
+      final originalText = '$rawTitle $rawDescription $rawIngredients';
+
+      String searchEn = '';
+      String searchTr = '';
+
+      try {
+        final t = GoogleTranslator();
+        if (isEn) {
+          searchEn = originalText.toLowerCase();
+          final trResult = await t.translate(originalText, to: 'tr');
+          searchTr = trResult.text.toLowerCase();
+        } else {
+          searchTr = originalText.toLowerCase();
+          final enResult = await t.translate(originalText, to: 'en');
+          searchEn = enResult.text.toLowerCase();
+        }
+      } catch (_) {
+        // Çeviri başarısız olursa aynı metni her iki alana yaz
+        searchEn = originalText.toLowerCase();
+        searchTr = originalText.toLowerCase();
+      }
+
+      // ── RecipeModel oluştur ───────────────────────────────────────────────
       final recipe = RecipeModel(
         id: _recipeService.generateId(),
         userId: user.uid,
         userEmail: user.email ?? '',
-        title: _titleController.text.trim(),
-        description: _descriptionController.text.trim(),
+        title: rawTitle,
+        description: rawDescription,
         ingredients: _ingredients,
         steps: _steps,
         category: _selectedCategory,
@@ -205,7 +237,9 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
             : null,
         dietTags: _selectedDietTags,
         imageUrl: imageUrl,
-        originalLanguage: widget.strings.isEnglish ? 'en' : 'tr',
+        originalLanguage: isEn ? 'en' : 'tr',
+        searchEn: searchEn,
+        searchTr: searchTr,
       );
 
       await _recipeService.addRecipe(recipe);
@@ -232,6 +266,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
     );
   }
 
+  // ─── Build ────────────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     final s = widget.strings;
@@ -259,7 +294,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
-            // Fotoğraf
+            // ── Fotoğraf ────────────────────────────────────────────────────
             GestureDetector(
               onTap: _pickImage,
               child: Container(
@@ -274,7 +309,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Başlık
+            // ── Başlık ───────────────────────────────────────────────────────
             TextFormField(
               controller: _titleController,
               decoration: InputDecoration(labelText: s.recipeName),
@@ -286,7 +321,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Açıklama
+            // ── Açıklama ─────────────────────────────────────────────────────
             TextFormField(
               controller: _descriptionController,
               maxLines: 3,
@@ -299,7 +334,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Kategori
+            // ── Kategori ─────────────────────────────────────────────────────
             DropdownButtonFormField<String>(
               value: _selectedCategory,
               decoration: InputDecoration(labelText: s.category),
@@ -315,7 +350,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Süre ve Porsiyon
+            // ── Süre ve Porsiyon ─────────────────────────────────────────────
             Row(
               children: [
                 Expanded(
@@ -323,8 +358,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
                     controller: _cookingTimeController,
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
-                      labelText:
-                      s.isEnglish ? 'Duration (min)' : 'Süre (dk)',
+                      labelText: s.isEnglish ? 'Duration (min)' : 'Süre (dk)',
                       prefixIcon: const Icon(Icons.access_time_outlined),
                     ),
                   ),
@@ -344,24 +378,21 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Zorluk
+            // ── Zorluk ───────────────────────────────────────────────────────
             DropdownButtonFormField<String>(
               value: _selectedDifficulty,
               decoration: InputDecoration(labelText: s.difficulty),
               items: [
-                DropdownMenuItem(
-                    value: 'easy', child: Text('😊 ${s.easy}')),
-                DropdownMenuItem(
-                    value: 'medium', child: Text('😐 ${s.medium}')),
-                DropdownMenuItem(
-                    value: 'hard', child: Text('😤 ${s.hard}')),
+                DropdownMenuItem(value: 'easy',   child: Text('😊 ${s.easy}')),
+                DropdownMenuItem(value: 'medium', child: Text('😐 ${s.medium}')),
+                DropdownMenuItem(value: 'hard',   child: Text('😤 ${s.hard}')),
               ],
               onChanged: (v) =>
                   setState(() => _selectedDifficulty = v ?? 'medium'),
             ),
             const SizedBox(height: 16),
 
-            // Kalori
+            // ── Kalori (opsiyonel) ───────────────────────────────────────────
             TextFormField(
               controller: _caloriesController,
               keyboardType: TextInputType.number,
@@ -369,13 +400,12 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
                 labelText: s.isEnglish
                     ? 'Calories (optional)'
                     : 'Kalori (isteğe bağlı)',
-                prefixIcon:
-                const Icon(Icons.local_fire_department_outlined),
+                prefixIcon: const Icon(Icons.local_fire_department_outlined),
               ),
             ),
             const SizedBox(height: 20),
 
-            // Diyet etiketleri
+            // ── Diyet etiketleri ─────────────────────────────────────────────
             Text(s.dietTags,
                 style: const TextStyle(
                     fontSize: 16, fontWeight: FontWeight.bold)),
@@ -384,20 +414,11 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
               spacing: 8,
               runSpacing: 4,
               children: [
-                {
-                  'key': 'vegetarian',
-                  'label': s.isEnglish ? '🥦 Vegetarian' : '🥦 Vejetaryen'
-                },
-                {'key': 'vegan', 'label': '🌱 Vegan'},
-                {
-                  'key': 'diet',
-                  'label': s.isEnglish ? '🥗 Diet' : '🥗 Diyet'
-                },
-                {'key': 'protein', 'label': '💪 Protein'},
-                {
-                  'key': 'carb',
-                  'label': s.isEnglish ? '🍞 Carbs' : '🍞 Karbonhidrat'
-                },
+                {'key': 'vegetarian', 'label': s.isEnglish ? '🥦 Vegetarian' : '🥦 Vejetaryen'},
+                {'key': 'vegan',      'label': '🌱 Vegan'},
+                {'key': 'diet',       'label': s.isEnglish ? '🥗 Diet' : '🥗 Diyet'},
+                {'key': 'protein',    'label': '💪 Protein'},
+                {'key': 'carb',       'label': s.isEnglish ? '🍞 Carbs' : '🍞 Karbonhidrat'},
               ].map((opt) {
                 final isSelected = _selectedDietTags.contains(opt['key']);
                 return FilterChip(
@@ -416,7 +437,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
             ),
             const SizedBox(height: 24),
 
-            // Malzemeler
+            // ── Malzemeler ───────────────────────────────────────────────────
             _buildSectionTitle(s.ingredients, _ingredients.length),
             ..._ingredients.asMap().entries.map((e) => ListTile(
               contentPadding: EdgeInsets.zero,
@@ -429,7 +450,8 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
               ),
               title: Text(e.value),
               trailing: IconButton(
-                icon: const Icon(Icons.delete_outline, color: Colors.red),
+                icon:
+                const Icon(Icons.delete_outline, color: Colors.red),
                 onPressed: () =>
                     setState(() => _ingredients.removeAt(e.key)),
               ),
@@ -459,8 +481,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
                           return DropdownMenuItem<String>(
                             value: unit['key'],
                             child: Text(
-                              s.isEnglish ? unit['en']! : unit['tr']!,
-                            ),
+                                s.isEnglish ? unit['en']! : unit['tr']!),
                           );
                         }).toList(),
                         onChanged: (value) {
@@ -477,7 +498,8 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
                   textEditingController: _ingredientController,
                   focusNode: _ingredientFocusNode,
                   optionsBuilder: (TextEditingValue textEditingValue) async {
-                    final query = textEditingValue.text.trim().toLowerCase();
+                    final query =
+                    textEditingValue.text.trim().toLowerCase();
                     if (query.isEmpty) {
                       return const Iterable<String>.empty();
                     }
@@ -547,7 +569,7 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
             ),
             const SizedBox(height: 24),
 
-            // Yapılış adımları
+            // ── Yapılış adımları ─────────────────────────────────────────────
             _buildSectionTitle(s.steps, _steps.length),
             ..._steps.asMap().entries.map((e) => ListTile(
               contentPadding: EdgeInsets.zero,
@@ -560,8 +582,10 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
               ),
               title: Text(e.value),
               trailing: IconButton(
-                icon: const Icon(Icons.delete_outline, color: Colors.red),
-                onPressed: () => setState(() => _steps.removeAt(e.key)),
+                icon:
+                const Icon(Icons.delete_outline, color: Colors.red),
+                onPressed: () =>
+                    setState(() => _steps.removeAt(e.key)),
               ),
             )),
             Row(
@@ -583,6 +607,8 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
       ),
     );
   }
+
+  // ─── Yardımcı widget'lar ──────────────────────────────────────────────────
 
   Widget _buildImagePreview() {
     if (kIsWeb && _imageBytes != null) {

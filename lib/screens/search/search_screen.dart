@@ -24,8 +24,16 @@ class SearchScreen extends StatefulWidget {
 class _SearchScreenState extends State<SearchScreen> {
   final _recipeService = RecipeService();
   final _searchController = TextEditingController();
+
   String _searchQuery = '';
   String _selectedCategory = 'all';
+
+  // ─── Arama state ──────────────────────────────────────────────────────────
+  List<RecipeModel> _searchResults = [];
+  bool _isSearching = false;
+
+  // Debounce: kullanıcı yazmayı bıraktıktan 400ms sonra ara
+  // (her tuş vuruşunda Firestore'a istek atmamak için)
 
   final List<Map<String, dynamic>> _categoryIcons = [
     {'key': 'all', 'label': 'Tümü', 'labelEn': 'All', 'icon': Icons.restaurant_menu},
@@ -45,6 +53,45 @@ class _SearchScreenState extends State<SearchScreen> {
     super.dispose();
   }
 
+  // ─── Arama tetikleyici ───────────────────────────────────────────────────
+  Future<void> _performSearch(String rawQuery) async {
+    final query = rawQuery.trim();
+
+    if (query.isEmpty) {
+      setState(() {
+        _searchResults = [];
+        _isSearching = false;
+      });
+      return;
+    }
+
+    setState(() => _isSearching = true);
+
+    try {
+      final results = await _recipeService.searchRecipes(
+        query,
+        langCode: widget.strings.isEnglish ? 'en' : 'tr',
+        category: _selectedCategory,
+      );
+      if (mounted) {
+        setState(() {
+          _searchResults = results;
+          _isSearching = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isSearching = false);
+    }
+  }
+
+  // Kategori değişince aktif arama varsa tekrar çalıştır
+  void _onCategoryChanged(String key) {
+    setState(() => _selectedCategory = key);
+    if (_searchQuery.isNotEmpty) {
+      _performSearch(_searchQuery);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -54,7 +101,7 @@ class _SearchScreenState extends State<SearchScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
+          // ── Header ────────────────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
             child: Text(
@@ -80,7 +127,7 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
           ),
 
-          // Arama kutusu
+          // ── Arama kutusu ─────────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
             child: Container(
@@ -103,21 +150,29 @@ class _SearchScreenState extends State<SearchScreen> {
               child: TextField(
                 controller: _searchController,
                 autofocus: false,
-                onChanged: (v) => setState(() => _searchQuery = v.toLowerCase()),
+                onChanged: (v) {
+                  setState(() => _searchQuery = v);
+                  _performSearch(v);
+                },
                 decoration: InputDecoration(
                   hintText: s.search,
                   hintStyle: TextStyle(
                     color: isDark ? AppColors.darkTextGrey : AppColors.textGrey,
                     fontSize: 14,
                   ),
-                  prefixIcon: Icon(Icons.search_rounded,
-                      color: isDark ? AppColors.darkTextGrey : AppColors.textGrey),
+                  prefixIcon: Icon(
+                    Icons.search_rounded,
+                    color: isDark ? AppColors.darkTextGrey : AppColors.textGrey,
+                  ),
                   suffixIcon: _searchQuery.isNotEmpty
                       ? IconButton(
                     icon: const Icon(Icons.clear),
                     onPressed: () {
                       _searchController.clear();
-                      setState(() => _searchQuery = '');
+                      setState(() {
+                        _searchQuery = '';
+                        _searchResults = [];
+                      });
                     },
                   )
                       : null,
@@ -125,14 +180,14 @@ class _SearchScreenState extends State<SearchScreen> {
                   enabledBorder: InputBorder.none,
                   focusedBorder: InputBorder.none,
                   filled: false,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 14),
+                  contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 ),
               ),
             ),
           ),
 
-          // Kategoriler
+          // ── Kategoriler ───────────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
             child: Text(
@@ -144,8 +199,6 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
             ),
           ),
-
-          // Kategori grid — 2 satır, yatay scroll
           SizedBox(
             height: 100,
             child: ListView.builder(
@@ -156,7 +209,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 final cat = _categoryIcons[index];
                 final isSelected = _selectedCategory == cat['key'];
                 return GestureDetector(
-                  onTap: () => setState(() => _selectedCategory = cat['key']),
+                  onTap: () => _onCategoryChanged(cat['key'] as String),
                   child: Container(
                     margin: const EdgeInsets.only(right: 12),
                     child: Column(
@@ -205,9 +258,8 @@ class _SearchScreenState extends State<SearchScreen> {
                               : cat['label'] as String,
                           style: TextStyle(
                             fontSize: 11,
-                            fontWeight: isSelected
-                                ? FontWeight.w700
-                                : FontWeight.w500,
+                            fontWeight:
+                            isSelected ? FontWeight.w700 : FontWeight.w500,
                             color: isSelected
                                 ? AppColors.primary
                                 : (isDark
@@ -223,7 +275,7 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
           ),
 
-          // Sonuçlar
+          // ── Sonuçlar başlığı ──────────────────────────────────────────────
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
             child: Text(
@@ -238,104 +290,117 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
           ),
 
-          // Tarif listesi
+          // ── Tarif listesi ─────────────────────────────────────────────────
           Expanded(
-            child: StreamBuilder<List<RecipeModel>>(
-              stream: _selectedCategory == 'all'
-                  ? _recipeService.getAllRecipes()
-                  : _recipeService.getRecipesByCategory(_selectedCategory),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (!snapshot.hasData || snapshot.data!.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.search_off_rounded,
-                            size: 64,
-                            color: isDark
-                                ? AppColors.darkTextGrey
-                                : AppColors.textGrey),
-                        const SizedBox(height: 16),
-                        Text(
-                          s.noRecipes,
-                          style: TextStyle(
-                            color: isDark
-                                ? AppColors.darkTextGrey
-                                : AppColors.textGrey,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                var recipes = snapshot.data!;
-
-                if (_searchQuery.isNotEmpty) {
-                  recipes = recipes
-                      .where((r) =>
-                  r.title.toLowerCase().contains(_searchQuery) ||
-                      r.description.toLowerCase().contains(_searchQuery) ||
-                      r.ingredients.any(
-                              (i) => i.toLowerCase().contains(_searchQuery)))
-                      .toList();
-                }
-
-                if (recipes.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.search_off_rounded,
-                            size: 64,
-                            color: isDark
-                                ? AppColors.darkTextGrey
-                                : AppColors.textGrey),
-                        const SizedBox(height: 16),
-                        Text(
-                          s.isEnglish
-                              ? 'No results found for "$_searchQuery"'
-                              : '"$_searchQuery" için sonuç bulunamadı',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: isDark
-                                ? AppColors.darkTextGrey
-                                : AppColors.textGrey,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                return ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
-                  itemCount: recipes.length,
-                  itemBuilder: (context, index) => RecipeCard(
-                    recipe: recipes[index],
-                    isEnglish: s.isEnglish,
-                    onTap: () => Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => RecipeDetailScreen(
-                          recipe: recipes[index],
-                          isGuest: widget.isGuest,
-                          strings: widget.strings,
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
+            child: _searchQuery.isNotEmpty
+                ? _buildSearchResults(isDark, s)
+                : _buildAllRecipes(isDark, s),
           ),
         ],
       ),
+    );
+  }
+
+  // Arama aktifken: Firestore sonuçları göster
+  Widget _buildSearchResults(bool isDark, AppStrings s) {
+    if (_isSearching) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_searchResults.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_off_rounded,
+                size: 64,
+                color: isDark ? AppColors.darkTextGrey : AppColors.textGrey),
+            const SizedBox(height: 16),
+            Text(
+              s.isEnglish
+                  ? 'No results found for "$_searchQuery"'
+                  : '"$_searchQuery" için sonuç bulunamadı',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: isDark ? AppColors.darkTextGrey : AppColors.textGrey,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+      itemCount: _searchResults.length,
+      itemBuilder: (context, index) => RecipeCard(
+        recipe: _searchResults[index],
+        isEnglish: s.isEnglish,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => RecipeDetailScreen(
+              recipe: _searchResults[index],
+              isGuest: widget.isGuest,
+              strings: widget.strings,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Arama boşken: tüm tarifleri stream ile göster (eski davranış)
+  Widget _buildAllRecipes(bool isDark, AppStrings s) {
+    return StreamBuilder<List<RecipeModel>>(
+      stream: _selectedCategory == 'all'
+          ? _recipeService.getAllRecipes()
+          : _recipeService.getRecipesByCategory(_selectedCategory),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.search_off_rounded,
+                    size: 64,
+                    color: isDark ? AppColors.darkTextGrey : AppColors.textGrey),
+                const SizedBox(height: 16),
+                Text(
+                  s.noRecipes,
+                  style: TextStyle(
+                    color: isDark ? AppColors.darkTextGrey : AppColors.textGrey,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 100),
+          itemCount: snapshot.data!.length,
+          itemBuilder: (context, index) => RecipeCard(
+            recipe: snapshot.data![index],
+            isEnglish: s.isEnglish,
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => RecipeDetailScreen(
+                  recipe: snapshot.data![index],
+                  isGuest: widget.isGuest,
+                  strings: widget.strings,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

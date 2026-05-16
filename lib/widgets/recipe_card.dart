@@ -22,14 +22,12 @@ class RecipeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    // ✅ YENİ: Kullanıcının diline göre lokalize içerik
     final langCode = isEnglish ? 'en' : 'tr';
 
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 16),
+        margin: const EdgeInsets.only(bottom: 12), // 16 → 12: daha kompakt
         decoration: BoxDecoration(
           color: isDark ? AppColors.darkCard : AppColors.surface,
           borderRadius: BorderRadius.circular(16),
@@ -42,15 +40,15 @@ class RecipeCard extends StatelessWidget {
               : [
             BoxShadow(
               color: AppColors.textDark.withOpacity(0.06),
-              blurRadius: 24,
-              offset: const Offset(0, 4),
+              blurRadius: 16, // 24 → 16
+              offset: const Offset(0, 3),
             ),
           ],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Fotoğraf
+            // ── Fotoğraf ──
             Stack(
               children: [
                 ClipRRect(
@@ -59,7 +57,7 @@ class RecipeCard extends StatelessWidget {
                   child: recipe.imageUrl != null
                       ? CachedNetworkImage(
                     imageUrl: recipe.imageUrl!,
-                    height: 200,
+                    height: 170, // 200 → 170: daha kompakt
                     width: double.infinity,
                     fit: BoxFit.cover,
                     errorWidget: (_, __, ___) => _placeholder(isDark),
@@ -69,36 +67,30 @@ class RecipeCard extends StatelessWidget {
 
                 // Puan badge
                 Positioned(
-                  top: 12,
-                  right: 12,
+                  top: 10,
+                  right: 10,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 5),
+                        horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: isDark
-                          ? AppColors.darkCard.withOpacity(0.9)
-                          : Colors.white.withOpacity(0.95),
-                      borderRadius: BorderRadius.circular(999),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 8,
-                        ),
-                      ],
+                          ? Colors.black.withOpacity(0.7)
+                          : Colors.white.withOpacity(0.92),
+                      borderRadius: BorderRadius.circular(20),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const Icon(Icons.star_rounded,
-                            color: Color(0xFFFFB347), size: 14),
-                        const SizedBox(width: 4),
+                            color: Colors.amber, size: 13),
+                        const SizedBox(width: 3),
                         Text(
                           recipe.ratingCount > 0
                               ? recipe.averageRating.toStringAsFixed(1)
                               : '-',
                           style: TextStyle(
                             fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w700,
                             color: isDark
                                 ? AppColors.darkTextDark
                                 : AppColors.textDark,
@@ -109,8 +101,10 @@ class RecipeCard extends StatelessWidget {
                           Text(
                             '(${recipe.ratingCount})',
                             style: TextStyle(
-                              fontSize: 11,
-                              color: isDark ? AppColors.darkTextGrey : AppColors.textGrey,
+                              fontSize: 10,
+                              color: isDark
+                                  ? AppColors.darkTextGrey
+                                  : AppColors.textGrey,
                             ),
                           ),
                         ],
@@ -122,12 +116,12 @@ class RecipeCard extends StatelessWidget {
                 // Admin sil butonu
                 if (onDelete != null)
                   Positioned(
-                    top: 12,
-                    left: 12,
+                    top: 10,
+                    left: 10,
                     child: GestureDetector(
                       onTap: onDelete,
                       child: Container(
-                        padding: const EdgeInsets.all(7),
+                        padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
                           color: Colors.red.withOpacity(0.9),
                           shape: BoxShape.circle,
@@ -140,16 +134,16 @@ class RecipeCard extends StatelessWidget {
               ],
             ),
 
-            // İçerik
+            // ── İçerik ──
             Padding(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12), // 14 → 12/10
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Kategori chip
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 4),
+                    padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: (AppColors.categoryColors[recipe.category] ??
                           AppColors.primary)
@@ -159,53 +153,54 @@ class RecipeCard extends StatelessWidget {
                     child: Text(
                       '${AppCategories.getEmojiByKey(recipe.category)} ${AppCategories.getLabelByKey(recipe.category, isEnglish: isEnglish)}',
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: 10,
                         fontWeight: FontWeight.w600,
-                        letterSpacing: 0.5,
+                        letterSpacing: 0.4,
                         color: AppColors.categoryColors[recipe.category] ??
                             AppColors.primary,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6), // 8 → 6
 
-                  // ✅ YENİ: Lokalize başlık
+                  // Başlık (lokalize)
                   Text(
                     recipe.localizedTitle(langCode),
                     style: TextStyle(
-                      fontSize: 18,
+                      fontSize: 16, // 18 → 16: kompakt
                       fontWeight: FontWeight.w600,
                       color:
                       isDark ? AppColors.darkTextDark : AppColors.textDark,
-                      height: 1.3,
+                      height: 1.25,
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 3), // 4 → 3
 
-                  // ✅ YENİ: Lokalize açıklama
+                  // Açıklama (lokalize)
                   Text(
                     recipe.localizedDescription(langCode),
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: 12, // 13 → 12: kompakt
                       color:
                       isDark ? AppColors.darkTextGrey : AppColors.textGrey,
-                      height: 1.4,
+                      height: 1.35,
                     ),
-                    maxLines: 2,
+                    maxLines: 1, // 2 → 1: daha az boşluk
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10), // 12 → 10
 
                   // Divider
                   Divider(
-                    color: isDark ? const Color(0xFF3D3530) : AppColors.outline,
+                    color:
+                    isDark ? const Color(0xFF3D3530) : AppColors.outline,
                     height: 1,
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 10), // 12 → 10
 
-                  // Alt bilgi: süre, porsiyon, zorluk
+                  // Alt bilgi: süre, porsiyon, zorluk + favori
                   Row(
                     children: [
                       _metaChip(
@@ -213,13 +208,13 @@ class RecipeCard extends StatelessWidget {
                         '${recipe.cookingTimeMinutes} ${isEnglish ? 'min' : 'dk'}',
                         isDark,
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 10),
                       _metaChip(
                         Icons.people_outline,
                         '${recipe.servings} ${isEnglish ? 'serv.' : 'kişi'}',
                         isDark,
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 10),
                       _metaChip(
                         Icons.bar_chart_rounded,
                         _difficultyLabel(recipe.difficulty, isEnglish),
@@ -228,15 +223,15 @@ class RecipeCard extends StatelessWidget {
                       ),
                       const Spacer(),
 
-                      // Favori
+                      // Favori sayısı
                       Row(
                         children: [
                           Icon(Icons.favorite_border,
-                              size: 14,
+                              size: 13,
                               color: isDark
                                   ? AppColors.darkTextGrey
                                   : AppColors.textGrey),
-                          const SizedBox(width: 4),
+                          const SizedBox(width: 3),
                           Text(
                             '${recipe.favoriteCount}',
                             style: TextStyle(
@@ -250,32 +245,6 @@ class RecipeCard extends StatelessWidget {
                       ),
                     ],
                   ),
-
-                  // Diyet etiketleri
-                  if (recipe.dietTags.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 6,
-                      children: recipe.dietTags.take(3).map((tag) {
-                        return Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            _dietLabel(tag, isEnglish),
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: AppColors.primary,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -287,15 +256,21 @@ class RecipeCard extends StatelessWidget {
 
   Widget _placeholder(bool isDark) {
     return Container(
-      height: 200,
+      height: 170, // 200 → 170
       width: double.infinity,
-      color: isDark ? AppColors.darkCard : AppColors.surfaceContainerHigh,
+      decoration: BoxDecoration(
+        color: isDark ? AppColors.darkCard : AppColors.surfaceContainerHigh,
+        borderRadius:
+        const BorderRadius.vertical(top: Radius.circular(15)),
+      ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.restaurant_menu,
-              size: 48,
-              color: isDark ? AppColors.darkTextGrey : AppColors.textGrey),
+          Icon(
+            Icons.restaurant_menu_outlined,
+            size: 36,
+            color: isDark ? AppColors.darkTextGrey : AppColors.textGrey,
+          ),
           const SizedBox(height: 8),
           Text(
             'No photo',
@@ -314,14 +289,14 @@ class RecipeCard extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(icon,
-            size: 13,
+            size: 12,
             color: color ??
                 (isDark ? AppColors.darkTextGrey : AppColors.textGrey)),
-        const SizedBox(width: 4),
+        const SizedBox(width: 3),
         Text(
           label,
           style: TextStyle(
-            fontSize: 12,
+            fontSize: 11,
             fontWeight: FontWeight.w500,
             color: color ??
                 (isDark ? AppColors.darkTextGrey : AppColors.textGrey),

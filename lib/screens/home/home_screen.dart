@@ -129,7 +129,6 @@ class _HomeScreenState extends State<HomeScreen> {
           height: 64,
           child: Row(
             children: [
-              // Akış
               _navItem(
                 icon: Icons.home_outlined,
                 selectedIcon: Icons.home,
@@ -138,11 +137,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 active: active,
                 inactive: inactive,
               ),
-              // Tarifler (Ara)
               _navItem(
                 icon: Icons.search_outlined,
                 selectedIcon: Icons.search,
-                label: widget.strings.isEnglish ? 'Recipes' : 'Tarifler',
+                label: widget.strings.isEnglish ? 'Search' : 'Ara',
                 index: 1,
                 active: active,
                 inactive: inactive,
@@ -184,7 +182,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
               ),
-              // Çark
               _navItem(
                 icon: Icons.casino_outlined,
                 selectedIcon: Icons.casino,
@@ -193,7 +190,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 active: active,
                 inactive: inactive,
               ),
-              // Profil
               _navItem(
                 icon: Icons.person_outline,
                 selectedIcon: Icons.person,
@@ -308,7 +304,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         ? (s.isEnglish ? 'Guest' : 'Misafir')
                         : (FirebaseAuth.instance.currentUser?.email ?? ''),
                     style: const TextStyle(
-                        color: Colors.white70, fontSize: 13),
+                      color: Colors.white70,
+                      fontSize: 13,
+                    ),
                   ),
                 ],
               ),
@@ -316,6 +314,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(height: 8),
 
+            // Admin paneli (admin ise)
             if (_isAdmin)
               _drawerTile(
                 icon: Icons.admin_panel_settings,
@@ -327,30 +326,35 @@ class _HomeScreenState extends State<HomeScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => AdminScreen(strings: widget.strings),
+                      builder: (_) => AdminScreen(strings: s),
                     ),
                   );
                 },
               ),
 
-            // Dark tema toggle
+            // Tema
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Row(
                 children: [
-                  Icon(isDark ? Icons.dark_mode : Icons.light_mode,
-                      color: isDark
-                          ? AppColors.darkTextGrey
-                          : AppColors.textGrey),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(s.darkTheme,
-                        style: TextStyle(
-                            color: isDark
-                                ? AppColors.darkTextDark
-                                : AppColors.textDark,
-                            fontSize: 15)),
+                  Icon(
+                    isDark ? Icons.dark_mode : Icons.light_mode,
+                    color: isDark
+                        ? AppColors.darkTextGrey
+                        : AppColors.textGrey,
+                    size: 20,
                   ),
+                  const SizedBox(width: 8),
+                  Text(
+                    s.darkTheme,
+                    style: TextStyle(
+                      color: isDark
+                          ? AppColors.darkTextDark
+                          : AppColors.textDark,
+                    ),
+                  ),
+                  const Spacer(),
                   Switch(
                     value: isDark,
                     activeColor: AppColors.primary,
@@ -360,44 +364,44 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
 
-            // Dil toggle
+            // Dil
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Row(
                 children: [
-                  Icon(Icons.language,
-                      color: isDark
+                  Text(
+                    '🇹🇷 TR',
+                    style: TextStyle(
+                      color: !s.isEnglish
+                          ? AppColors.primary
+                          : (isDark
                           ? AppColors.darkTextGrey
                           : AppColors.textGrey),
-                  const SizedBox(width: 12),
-                  Text('🇹🇷 TR',
-                      style: TextStyle(
-                        color: !s.isEnglish
-                            ? AppColors.primary
-                            : (isDark
-                            ? AppColors.darkTextGrey
-                            : AppColors.textGrey),
-                        fontWeight: !s.isEnglish
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                      )),
+                      fontWeight: !s.isEnglish
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
+                  ),
                   Switch(
                     value: s.isEnglish,
                     activeColor: AppColors.primary,
                     onChanged: (_) =>
                         RecipeApp.of(context)?.toggleLanguage(),
                   ),
-                  Text('🇬🇧 EN',
-                      style: TextStyle(
-                        color: s.isEnglish
-                            ? AppColors.primary
-                            : (isDark
-                            ? AppColors.darkTextGrey
-                            : AppColors.textGrey),
-                        fontWeight: s.isEnglish
-                            ? FontWeight.bold
-                            : FontWeight.normal,
-                      )),
+                  Text(
+                    '🇬🇧 EN',
+                    style: TextStyle(
+                      color: s.isEnglish
+                          ? AppColors.primary
+                          : (isDark
+                          ? AppColors.darkTextGrey
+                          : AppColors.textGrey),
+                      fontWeight: s.isEnglish
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -503,7 +507,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-// ---- ANA SAYFA TAB ----
+// ══════════════════════════════════════════════════════════════
+//  ANA SAYFA TAB
+// ══════════════════════════════════════════════════════════════
 class _HomeTab extends StatefulWidget {
   final bool isGuest;
   final bool isAdmin;
@@ -530,13 +536,48 @@ class _HomeTabState extends State<_HomeTab> {
   String _sortBy = 'newest';
 
   final List<Map<String, dynamic>> _categoryIcons = [
-    {'key': 'all', 'label': 'Tümü', 'labelEn': 'All', 'icon': Icons.restaurant_menu},
-    {'key': 'breakfast', 'label': 'Kahvaltı', 'labelEn': 'Breakfast', 'icon': Icons.free_breakfast_outlined},
-    {'key': 'lunch', 'label': 'Öğle', 'labelEn': 'Lunch', 'icon': Icons.lunch_dining_outlined},
-    {'key': 'dinner', 'label': 'Akşam', 'labelEn': 'Dinner', 'icon': Icons.dinner_dining_outlined},
-    {'key': 'dessert', 'label': 'Tatlı', 'labelEn': 'Dessert', 'icon': Icons.cake_outlined},
-    {'key': 'snack', 'label': 'Atıştırmalık', 'labelEn': 'Snack', 'icon': Icons.fastfood_outlined},
-    {'key': 'other', 'label': 'Diğer', 'labelEn': 'Other', 'icon': Icons.more_horiz},
+    {
+      'key': 'all',
+      'label': 'Tümü',
+      'labelEn': 'All',
+      'icon': Icons.restaurant_menu
+    },
+    {
+      'key': 'breakfast',
+      'label': 'Kahvaltı',
+      'labelEn': 'Breakfast',
+      'icon': Icons.free_breakfast_outlined
+    },
+    {
+      'key': 'lunch',
+      'label': 'Öğle',
+      'labelEn': 'Lunch',
+      'icon': Icons.lunch_dining_outlined
+    },
+    {
+      'key': 'dinner',
+      'label': 'Akşam',
+      'labelEn': 'Dinner',
+      'icon': Icons.dinner_dining_outlined
+    },
+    {
+      'key': 'dessert',
+      'label': 'Tatlı',
+      'labelEn': 'Dessert',
+      'icon': Icons.cake_outlined
+    },
+    {
+      'key': 'snack',
+      'label': 'Atıştırmalık',
+      'labelEn': 'Snack',
+      'icon': Icons.fastfood_outlined
+    },
+    {
+      'key': 'other',
+      'label': 'Diğer',
+      'labelEn': 'Other',
+      'icon': Icons.more_horiz
+    },
   ];
 
   Future<void> _adminDelete(String recipeId) async {
@@ -571,7 +612,7 @@ class _HomeTabState extends State<_HomeTab> {
     return SafeArea(
       child: CustomScrollView(
         slivers: [
-          // Header
+          // ── Header ──
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
@@ -606,7 +647,7 @@ class _HomeTabState extends State<_HomeTab> {
                     ),
                   ),
 
-                  // Logo + isim ortada
+                  // Logo ortada
                   Row(
                     children: [
                       Image.asset(
@@ -615,18 +656,16 @@ class _HomeTabState extends State<_HomeTab> {
                         height: 96,
                       ),
                       const SizedBox(width: 8),
-
                     ],
                   ),
 
-                  // Sağ taraf boş bırakıldı (çarkıfelek butonu alt bara taşındı)
                   const SizedBox(width: 42),
                 ],
               ),
             ),
           ),
 
-          // Kategoriler başlık
+          // ── Kategoriler başlık ──
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
@@ -641,7 +680,7 @@ class _HomeTabState extends State<_HomeTab> {
             ),
           ),
 
-          // Kategori grid
+          // ── Kategori grid ──
           SliverToBoxAdapter(
             child: SizedBox(
               height: 90,
@@ -679,8 +718,8 @@ class _HomeTabState extends State<_HomeTab> {
                               boxShadow: isSelected
                                   ? [
                                 BoxShadow(
-                                  color: AppColors.primary
-                                      .withOpacity(0.3),
+                                  color:
+                                  AppColors.primary.withOpacity(0.3),
                                   blurRadius: 8,
                                   offset: const Offset(0, 4),
                                 )
@@ -723,30 +762,36 @@ class _HomeTabState extends State<_HomeTab> {
             ),
           ),
 
-          // Diyet filtreleri
+          // ── Diyet filtreleri — FIX: height 44, simetrik padding, alignment.center ──
           SliverToBoxAdapter(
             child: SizedBox(
-              height: 40,
+              height: 44, // 40 → 44
               child: ListView(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 0),
+                padding: const EdgeInsets.symmetric(horizontal: 20), // fromLTRB(20,4,20,0) → symmetric
                 children: [
                   _buildDietChip(
                       'all', s.isEnglish ? '🍽️ All' : '🍽️ Hepsi', isDark),
-                  _buildDietChip('vegetarian',
-                      s.isEnglish ? '🥦 Vegetarian' : '🥦 Vejetaryen', isDark),
+                  _buildDietChip(
+                      'vegetarian',
+                      s.isEnglish ? '🥦 Vegetarian' : '🥦 Vejetaryen',
+                      isDark),
                   _buildDietChip('vegan', '🌱 Vegan', isDark),
                   _buildDietChip(
-                      'diet', s.isEnglish ? '🥗 Diet' : '🥗 Diyet', isDark),
+                      'diet',
+                      s.isEnglish ? '🥗 Diet' : '🥗 Diyet',
+                      isDark),
                   _buildDietChip('protein', '💪 Protein', isDark),
-                  _buildDietChip('carb',
-                      s.isEnglish ? '🍞 Carbs' : '🍞 Karbonhidrat', isDark),
+                  _buildDietChip(
+                      'carb',
+                      s.isEnglish ? '🍞 Carbs' : '🍞 Karbonhidrat',
+                      isDark),
                 ],
               ),
             ),
           ),
 
-          // En Popüler başlık
+          // ── En Popüler başlık ──
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
@@ -763,7 +808,6 @@ class _HomeTabState extends State<_HomeTab> {
                           : AppColors.textDark,
                     ),
                   ),
-                  // Sıralama seçici
                   GestureDetector(
                     onTap: () {
                       showModalBottomSheet(
@@ -773,7 +817,8 @@ class _HomeTabState extends State<_HomeTab> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               ListTile(
-                                title: Text(s.isEnglish ? 'Newest' : 'En Yeni'),
+                                title: Text(
+                                    s.isEnglish ? 'Newest' : 'En Yeni'),
                                 leading: const Icon(Icons.access_time),
                                 selected: _sortBy == 'newest',
                                 selectedColor: AppColors.primary,
@@ -783,8 +828,9 @@ class _HomeTabState extends State<_HomeTab> {
                                 },
                               ),
                               ListTile(
-                                title: Text(
-                                    s.isEnglish ? 'Top Rated' : 'En Yüksek Puan'),
+                                title: Text(s.isEnglish
+                                    ? 'Top Rated'
+                                    : 'En Yüksek Puan'),
                                 leading: const Icon(Icons.star_outline),
                                 selected: _sortBy == 'rating',
                                 selectedColor: AppColors.primary,
@@ -794,9 +840,11 @@ class _HomeTabState extends State<_HomeTab> {
                                 },
                               ),
                               ListTile(
-                                title: Text(
-                                    s.isEnglish ? 'Most Liked' : 'En Çok Beğenilen'),
-                                leading: const Icon(Icons.favorite_outline),
+                                title: Text(s.isEnglish
+                                    ? 'Most Liked'
+                                    : 'En Çok Beğenilen'),
+                                leading:
+                                const Icon(Icons.favorite_outline),
                                 selected: _sortBy == 'favorites',
                                 selectedColor: AppColors.primary,
                                 onTap: () {
@@ -829,7 +877,7 @@ class _HomeTabState extends State<_HomeTab> {
             ),
           ),
 
-          // En popüler tarifler (yatay scroll)
+          // ── En popüler tarifler (yatay scroll) ──
           StreamBuilder<List<RecipeModel>>(
             stream: _recipeService.getTopRatedRecipes(),
             builder: (context, snapshot) {
@@ -839,7 +887,7 @@ class _HomeTabState extends State<_HomeTab> {
               final recipes = snapshot.data!.take(10).toList();
               return SliverToBoxAdapter(
                 child: SizedBox(
-                  height: 230,
+                  height: 200, // 220 -> 240: 160px kare resim + metin alanı için
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
@@ -858,7 +906,7 @@ class _HomeTabState extends State<_HomeTab> {
                           ),
                         ),
                         child: SizedBox(
-                          width: 150,
+                          width: 160, // 190 -> 160: kare resimle uyumlu genişlik
                           child: Container(
                             margin: const EdgeInsets.only(right: 12),
                             decoration: BoxDecoration(
@@ -882,7 +930,7 @@ class _HomeTabState extends State<_HomeTab> {
                                   child: recipe.imageUrl != null
                                       ? Image.network(
                                     recipe.imageUrl!,
-                                    height: 110,
+                                    height: 120, // 130 -> 160: tam kare resim (160x160)
                                     width: double.infinity,
                                     fit: BoxFit.cover,
                                     errorBuilder: (_, __, ___) =>
@@ -898,7 +946,8 @@ class _HomeTabState extends State<_HomeTab> {
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       Text(
-                                        recipe.title,
+                                        recipe.localizedTitle(
+                                            s.isEnglish ? 'en' : 'tr'),
                                         style: TextStyle(
                                           fontSize: 12,
                                           fontWeight: FontWeight.w600,
@@ -913,26 +962,24 @@ class _HomeTabState extends State<_HomeTab> {
                                       Row(
                                         children: [
                                           const Icon(Icons.star_rounded,
-                                              color: Color(0xFFFFB347),
-                                              size: 12),
-                                          const SizedBox(width: 3),
+                                              color: Colors.amber, size: 12),
+                                          const SizedBox(width: 2),
                                           Text(
-                                            recipe.averageRating
-                                                .toStringAsFixed(1),
+                                            recipe.ratingCount > 0
+                                                ? recipe.averageRating
+                                                .toStringAsFixed(1)
+                                                : '-',
                                             style: TextStyle(
                                               fontSize: 11,
-                                              fontWeight: FontWeight.w600,
                                               color: isDark
                                                   ? AppColors.darkTextGrey
                                                   : AppColors.textGrey,
                                             ),
                                           ),
                                           const SizedBox(width: 6),
-                                          Icon(Icons.access_time_outlined,
+                                          const Icon(Icons.access_time_outlined,
                                               size: 11,
-                                              color: isDark
-                                                  ? AppColors.darkTextGrey
-                                                  : AppColors.textGrey),
+                                              color: AppColors.textGrey),
                                           const SizedBox(width: 2),
                                           Flexible(
                                             child: Text(
@@ -953,7 +1000,7 @@ class _HomeTabState extends State<_HomeTab> {
                                 ),
                               ],
                             ),
-                          ), // SizedBox
+                          ),
                         ),
                       );
                     },
@@ -963,7 +1010,7 @@ class _HomeTabState extends State<_HomeTab> {
             },
           ),
 
-          // Son Tarifler başlık
+          // ── Son Tarifler başlık ──
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 24, 20, 12),
@@ -993,7 +1040,7 @@ class _HomeTabState extends State<_HomeTab> {
             ),
           ),
 
-          // Son tarifler listesi
+          // ── Son tarifler listesi ──
           StreamBuilder<List<RecipeModel>>(
             stream: _selectedCategory == 'all'
                 ? _recipeService.getAllRecipes()
@@ -1021,14 +1068,14 @@ class _HomeTabState extends State<_HomeTab> {
 
               // Sıralama
               if (_sortBy == 'rating') {
-                recipes.sort((a, b) =>
-                    b.averageRating.compareTo(a.averageRating));
+                recipes.sort(
+                        (a, b) => b.averageRating.compareTo(a.averageRating));
               } else if (_sortBy == 'favorites') {
                 recipes.sort(
                         (a, b) => b.favoriteCount.compareTo(a.favoriteCount));
               } else {
-                recipes.sort(
-                        (a, b) => b.createdAt.compareTo(a.createdAt));
+                recipes
+                    .sort((a, b) => b.createdAt.compareTo(a.createdAt));
               }
 
               if (recipes.isEmpty) {
@@ -1095,15 +1142,16 @@ class _HomeTabState extends State<_HomeTab> {
 
   Widget _imagePlaceholder(bool isDark) {
     return Container(
-      height: 120,
+      height: 160, // 130 -> 160
       width: double.infinity,
       color: isDark ? AppColors.darkCard : AppColors.surfaceContainerHigh,
       child: Icon(Icons.restaurant_menu,
-          size: 32,
+          size: 28,
           color: isDark ? AppColors.darkTextGrey : AppColors.textGrey),
     );
   }
 
+  // ── FIX: alignment.center ile yazılar tam ortalanıyor ──
   Widget _buildDietChip(String key, String label, bool isDark) {
     final isSelected = _selectedDietTag == key;
     return Padding(
@@ -1112,7 +1160,8 @@ class _HomeTabState extends State<_HomeTab> {
         onTap: () => setState(() => _selectedDietTag = key),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          alignment: Alignment.center, // ← dikey ortalama
+          padding: const EdgeInsets.symmetric(horizontal: 14),
           decoration: BoxDecoration(
             color: isSelected
                 ? AppColors.primary.withOpacity(0.12)
@@ -1121,20 +1170,17 @@ class _HomeTabState extends State<_HomeTab> {
             border: Border.all(
               color: isSelected
                   ? AppColors.primary
-                  : AppColors.textGrey.withOpacity(0.3),
+                  : (isDark ? const Color(0xFF3D3530) : AppColors.outline),
             ),
           ),
           child: Text(
             label,
             style: TextStyle(
+              fontSize: 13,
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
               color: isSelected
                   ? AppColors.primary
-                  : (isDark
-                  ? AppColors.darkTextGrey
-                  : AppColors.textGrey),
-              fontWeight:
-              isSelected ? FontWeight.bold : FontWeight.normal,
-              fontSize: 12,
+                  : (isDark ? AppColors.darkTextGrey : AppColors.textGrey),
             ),
           ),
         ),

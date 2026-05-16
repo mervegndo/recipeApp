@@ -77,6 +77,100 @@ class RecipeService {
         .toList());
   }
 
+  // ─── Çok dilli tarif arama ────────────────────────────────────────────────
+  //
+  // 3 katmanlı strateji:
+  //
+  // 1. Arayüz diline (langCode) göre Firestore prefix araması yap.
+  // 2. Sonuç boşsa → diğer dilde Firestore prefix araması yap (cross-lang).
+  // 3. Hâlâ boşsa → tüm tarifleri çek, title/description/ingredients içinde
+  //    .contains() ile client-side ara (reindex henüz yapılmamış tarifler için).
+  //
+  // Sonuç:
+  //   İngilizce modda "spicy"  → searchEn'de bulur       ✅
+  //   İngilizce modda "acılı"  → searchTr'de bulur       ✅
+  //   Türkçe modda "acılı"     → searchTr'de bulur       ✅
+  //   Türkçe modda "spicy"     → searchEn'de bulur       ✅
+  //   Hiç index yoksa          → title/ingredients'ta    ✅
+
+  Future<List<RecipeModel>> searchRecipes(
+      String query, {
+        required String langCode,
+        String? category,
+      }) async {
+    if (query.trim().isEmpty) return [];
+
+    final q = query.trim().toLowerCase();
+    final primaryField = langCode == 'tr' ? 'searchTr' : 'searchEn';
+    final fallbackField = langCode == 'tr' ? 'searchEn' : 'searchTr';
+
+    // 1. Birincil dil
+    final primary = await _prefixSearch(q, primaryField, category);
+    if (primary.isNotEmpty) return primary;
+
+    // 2. Diğer dil (cross-lang fallback)
+    final fallback = await _prefixSearch(q, fallbackField, category);
+    if (fallback.isNotEmpty) return fallback;
+
+    // 3. Client-side contains (reindex yapılmamış eski tarifler)
+    return _clientSideSearch(q, category);
+  }
+
+  /// Firestore prefix araması
+  Future<List<RecipeModel>> _prefixSearch(
+      String q,
+      String field,
+      String? category,
+      ) async {
+    try {
+      Query<Map<String, dynamic>> ref = _firestore.collection('recipes');
+      if (category != null && category != 'all') {
+        ref = ref.where('category', isEqualTo: category);
+      }
+      ref = ref
+          .where(field, isGreaterThanOrEqualTo: q)
+          .where(field, isLessThanOrEqualTo: '$q\uf8ff')
+          .limit(40);
+
+      final snapshot = await ref.get();
+      return snapshot.docs
+          .map((doc) => RecipeModel.fromMap(doc.data(), doc.id))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Client-side contains araması — reindex yapılmamış tarifler için fallback
+  Future<List<RecipeModel>> _clientSideSearch(
+      String q,
+      String? category,
+      ) async {
+    try {
+      Query<Map<String, dynamic>> ref = _firestore.collection('recipes');
+      if (category != null && category != 'all') {
+        ref = ref.where('category', isEqualTo: category);
+      }
+      final snapshot = await ref.limit(200).get();
+      final all = snapshot.docs
+          .map((doc) => RecipeModel.fromMap(doc.data(), doc.id))
+          .toList();
+
+      return all.where((r) {
+        final haystack = [
+          r.title,
+          r.description,
+          ...r.ingredients,
+          r.searchEn,
+          r.searchTr,
+        ].join(' ').toLowerCase();
+        return haystack.contains(q);
+      }).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   Future<void> addRecipe(RecipeModel recipe,
       {File? imageFile, Uint8List? imageBytes, String? imageUrl}) async {
     String? finalImageUrl = imageUrl ?? recipe.imageUrl;
@@ -105,6 +199,9 @@ class RecipeService {
       difficulty: recipe.difficulty,
       calories: recipe.calories,
       dietTags: recipe.dietTags,
+      originalLanguage: recipe.originalLanguage,
+      searchEn: recipe.searchEn,
+      searchTr: recipe.searchTr,
     );
 
     await _firestore

@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:translator/translator.dart';
 import '../../models/recipe_model.dart';
 import '../../services/recipe_service.dart';
 import '../../utils/app_constants.dart';
@@ -24,6 +25,11 @@ class _AdminScreenState extends State<AdminScreen>
   final _userSearchController = TextEditingController();
   String _userSearchQuery = '';
 
+  // ─── Reindex state ────────────────────────────────────────────────────────
+  bool _isReindexing = false;
+  int _reindexDone = 0;
+  int _reindexTotal = 0;
+
   @override
   void initState() {
     super.initState();
@@ -35,6 +41,129 @@ class _AdminScreenState extends State<AdminScreen>
     _tabController.dispose();
     _userSearchController.dispose();
     super.dispose();
+  }
+
+  // ─── Reindex işlemi ───────────────────────────────────────────────────────
+  Future<void> _reindexAllRecipes() async {
+    // Onay al
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.sync, color: AppColors.primary),
+            const SizedBox(width: 8),
+            Text(widget.strings.isEnglish
+                ? 'Reindex Recipes'
+                : 'Tarifleri Yeniden İndeksle'),
+          ],
+        ),
+        content: Text(
+          widget.strings.isEnglish
+              ? 'This will translate all recipes and fill in the search fields (searchEn / searchTr). It may take a while depending on the number of recipes. Continue?'
+              : 'Tüm tarifler çevrilecek ve arama alanları (searchEn / searchTr) doldurulacak. Tarif sayısına göre biraz sürebilir. Devam edilsin mi?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(widget.strings.cancel),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(widget.strings.isEnglish ? 'Start' : 'Başlat'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() {
+      _isReindexing = true;
+      _reindexDone = 0;
+      _reindexTotal = 0;
+    });
+
+    try {
+      final snapshot = await _firestore.collection('recipes').get();
+      final docs = snapshot.docs;
+
+      setState(() => _reindexTotal = docs.length);
+
+      final translator = GoogleTranslator();
+
+      for (final doc in docs) {
+        try {
+          final recipe = RecipeModel.fromMap(doc.data(), doc.id);
+
+          // searchEn veya searchTr zaten dolu ise atla
+          if (recipe.searchEn.isNotEmpty && recipe.searchTr.isNotEmpty) {
+            setState(() => _reindexDone++);
+            continue;
+          }
+
+          final isEn = recipe.originalLanguage == 'en';
+          final originalText =
+              '${recipe.title} ${recipe.description} ${recipe.ingredients.join(' ')}';
+
+          String searchEn = '';
+          String searchTr = '';
+
+          try {
+            if (isEn) {
+              searchEn = originalText.toLowerCase();
+              final tr = await translator.translate(originalText, to: 'tr');
+              searchTr = tr.text.toLowerCase();
+            } else {
+              searchTr = originalText.toLowerCase();
+              final en = await translator.translate(originalText, to: 'en');
+              searchEn = en.text.toLowerCase();
+            }
+          } catch (_) {
+            // Çeviri başarısız → aynı metni her iki alana yaz
+            searchEn = originalText.toLowerCase();
+            searchTr = originalText.toLowerCase();
+          }
+
+          await _firestore.collection('recipes').doc(doc.id).update({
+            'searchEn': searchEn,
+            'searchTr': searchTr,
+          });
+        } catch (_) {
+          // Tek bir tarif başarısız olursa devam et
+        }
+
+        setState(() => _reindexDone++);
+
+        // API rate limit için küçük bir bekleme
+        await Future.delayed(const Duration(milliseconds: 300));
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(widget.strings.isEnglish
+              ? '✅ Reindex complete! $_reindexDone recipes updated.'
+              : '✅ İndeksleme tamamlandı! $_reindexDone tarif güncellendi.'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 4),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Hata: $e'),
+          backgroundColor: Colors.red,
+        ));
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isReindexing = false;
+          _reindexDone = 0;
+          _reindexTotal = 0;
+        });
+      }
+    }
   }
 
   @override
@@ -85,7 +214,7 @@ class _AdminScreenState extends State<AdminScreen>
     );
   }
 
-  // ---- TARİFLER ----
+  // ── TARİFLER TAB ──────────────────────────────────────────────────────────
   Widget _buildRecipesTab(bool isDark) {
     return StreamBuilder<List<RecipeModel>>(
       stream: _recipeService.getAllRecipes(),
@@ -104,13 +233,15 @@ class _AdminScreenState extends State<AdminScreen>
 
         return Column(
           children: [
+            // ── İstatistik kartı ──────────────────────────────────────────
             Container(
-              margin: const EdgeInsets.all(16),
+              margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: AppColors.primary.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                border:
+                Border.all(color: AppColors.primary.withOpacity(0.2)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -129,20 +260,101 @@ class _AdminScreenState extends State<AdminScreen>
                         recipes.length)
                         .toStringAsFixed(1)
                         : '0',
-                    label: widget.strings.isEnglish ? 'Avg Rating' : 'Ort. Puan',
+                    label: widget.strings.isEnglish
+                        ? 'Avg Rating'
+                        : 'Ort. Puan',
                   ),
                   _statBox(
                     icon: Icons.favorite,
                     value:
                     '${recipes.map((r) => r.favoriteCount).fold(0, (a, b) => a + b)}',
-                    label: widget.strings.isEnglish ? 'Favorites' : 'Favori',
+                    label:
+                    widget.strings.isEnglish ? 'Favorites' : 'Favori',
                   ),
                 ],
               ),
             ),
+
+            // ── Reindex butonu ────────────────────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: _isReindexing
+                  ? Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                      color: AppColors.primary.withOpacity(0.2)),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.primary),
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          widget.strings.isEnglish
+                              ? 'Indexing... $_reindexDone / $_reindexTotal'
+                              : 'İndeksleniyor... $_reindexDone / $_reindexTotal',
+                          style: const TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: _reindexTotal > 0
+                            ? _reindexDone / _reindexTotal
+                            : 0,
+                        backgroundColor:
+                        AppColors.primary.withOpacity(0.15),
+                        color: AppColors.primary,
+                        minHeight: 6,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+                  : SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _reindexAllRecipes,
+                  icon: const Icon(Icons.sync_rounded,
+                      color: AppColors.primary),
+                  label: Text(
+                    widget.strings.isEnglish
+                        ? 'Reindex All Recipes (Search Fix)'
+                        : 'Tarifleri Yeniden İndeksle (Arama Düzeltme)',
+                    style:
+                    const TextStyle(color: AppColors.primary),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: AppColors.primary),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    padding:
+                    const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ),
+
+            // ── Tarif listesi ─────────────────────────────────────────────
             Expanded(
               child: ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 itemCount: recipes.length,
                 itemBuilder: (context, index) =>
                     _recipeAdminCard(recipes[index], isDark),
@@ -177,7 +389,8 @@ class _AdminScreenState extends State<AdminScreen>
               : _miniPlaceholder(isDark),
         ),
         title: Text(recipe.title,
-            style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            style:
+            const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
             maxLines: 1,
             overflow: TextOverflow.ellipsis),
         subtitle: Column(
@@ -209,6 +422,23 @@ class _AdminScreenState extends State<AdminScreen>
               Text('${recipe.favoriteCount}',
                   style: const TextStyle(
                       fontSize: 11, color: AppColors.textGrey)),
+              // Küçük index göstergesi
+              if (recipe.searchEn.isEmpty || recipe.searchTr.isEmpty) ...[
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 5, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: const Text('no index',
+                      style: TextStyle(
+                          fontSize: 9,
+                          color: Colors.orange,
+                          fontWeight: FontWeight.w600)),
+                ),
+              ],
             ]),
           ],
         ),
@@ -253,7 +483,8 @@ class _AdminScreenState extends State<AdminScreen>
             const SizedBox(height: 8),
             Text('"${recipe.title}"',
                 style: const TextStyle(
-                    fontWeight: FontWeight.bold, color: AppColors.primary)),
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primary)),
           ],
         ),
         actions: [
@@ -263,7 +494,8 @@ class _AdminScreenState extends State<AdminScreen>
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style:
+            ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: Text(widget.strings.delete),
           ),
         ],
@@ -282,7 +514,7 @@ class _AdminScreenState extends State<AdminScreen>
     }
   }
 
-  // ---- YORUMLAR ----
+  // ── YORUMLAR TAB ──────────────────────────────────────────────────────────
   Widget _buildCommentsTab(bool isDark) {
     return StreamBuilder<List<RecipeModel>>(
       stream: _recipeService.getAllRecipes(),
@@ -424,54 +656,32 @@ class _AdminScreenState extends State<AdminScreen>
                 ]),
                 const SizedBox(height: 4),
                 Text(data['text'] ?? '',
-                    style: TextStyle(
-                        fontSize: 13,
-                        color: isDark
-                            ? AppColors.darkTextGrey
-                            : AppColors.textGrey)),
+                    style: const TextStyle(fontSize: 13)),
               ],
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.delete_outline,
-                color: Colors.red, size: 18),
-            onPressed: () =>
-                _confirmDeleteComment(recipeId, commentId, data),
+            icon:
+            const Icon(Icons.delete_outline, color: Colors.red, size: 18),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(),
+            onPressed: () => _confirmDeleteComment(recipeId, commentId),
           ),
         ],
       ),
     );
   }
 
-  Future<void> _confirmDeleteComment(String recipeId, String commentId,
-      Map<String, dynamic> data) async {
+  Future<void> _confirmDeleteComment(
+      String recipeId, String commentId) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
         title: Text(
             widget.strings.isEnglish ? 'Delete Comment' : 'Yorumu Sil'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(widget.strings.isEnglish
-                ? 'Are you sure you want to delete this comment?'
-                : 'Bu yorumu silmek istediğinizden emin misiniz?'),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.surfaceContainer,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text('"${data['text'] ?? ''}"',
-                  style: const TextStyle(
-                      fontStyle: FontStyle.italic, fontSize: 13)),
-            ),
-          ],
-        ),
+        content: Text(widget.strings.isEnglish
+            ? 'Are you sure you want to delete this comment?'
+            : 'Bu yorumu silmek istediğinizden emin misiniz?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -479,7 +689,8 @@ class _AdminScreenState extends State<AdminScreen>
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style:
+            ElevatedButton.styleFrom(backgroundColor: Colors.red),
             child: Text(widget.strings.delete),
           ),
         ],
@@ -498,7 +709,7 @@ class _AdminScreenState extends State<AdminScreen>
     }
   }
 
-  // ---- KULLANICILAR ----
+  // ── KULLANICILAR TAB ──────────────────────────────────────────────────────
   Widget _buildUsersTab(bool isDark) {
     return StreamBuilder<QuerySnapshot>(
       stream: _firestore.collection('users').snapshots(),
@@ -519,7 +730,6 @@ class _AdminScreenState extends State<AdminScreen>
 
         final allUsers = snapshot.data!.docs;
 
-        // Filtreleme — stream dışında yapılıyor, setState tetiklemez
         final admins = allUsers
             .where((doc) =>
         (doc.data() as Map<String, dynamic>)['role'] == 'admin')
@@ -533,8 +743,7 @@ class _AdminScreenState extends State<AdminScreen>
             ? regularUsers
             : regularUsers.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
-          final name =
-          (data['displayName'] ?? '').toLowerCase();
+          final name = (data['displayName'] ?? '').toLowerCase();
           final email = (data['email'] ?? '').toLowerCase();
           return name.contains(_userSearchQuery) ||
               email.contains(_userSearchQuery);
@@ -544,8 +753,7 @@ class _AdminScreenState extends State<AdminScreen>
             ? admins
             : admins.where((doc) {
           final data = doc.data() as Map<String, dynamic>;
-          final name =
-          (data['displayName'] ?? '').toLowerCase();
+          final name = (data['displayName'] ?? '').toLowerCase();
           final email = (data['email'] ?? '').toLowerCase();
           return name.contains(_userSearchQuery) ||
               email.contains(_userSearchQuery);
@@ -553,7 +761,6 @@ class _AdminScreenState extends State<AdminScreen>
 
         return Column(
           children: [
-            // Özet
             Container(
               margin: const EdgeInsets.all(16),
               padding: const EdgeInsets.all(16),
@@ -569,9 +776,7 @@ class _AdminScreenState extends State<AdminScreen>
                   _statBox(
                     icon: Icons.people,
                     value: '${allUsers.length}',
-                    label: widget.strings.isEnglish
-                        ? 'Total'
-                        : 'Toplam',
+                    label: widget.strings.isEnglish ? 'Total' : 'Toplam',
                   ),
                   _statBox(
                     icon: Icons.admin_panel_settings,
@@ -586,17 +791,12 @@ class _AdminScreenState extends State<AdminScreen>
                 ],
               ),
             ),
-
-            // Arama
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: TextField(
                 controller: _userSearchController,
                 onChanged: (v) {
                   _userSearchQuery = v.toLowerCase();
-                  // StreamBuilder'ı yeniden çalıştırmak için setState
-                  // ama stream'i yeniden başlatmamak için sadece
-                  // local değişkeni güncelliyoruz
                   (context as Element).markNeedsBuild();
                 },
                 decoration: InputDecoration(
@@ -617,13 +817,10 @@ class _AdminScreenState extends State<AdminScreen>
                 ),
               ),
             ),
-
-            // Liste
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 children: [
-                  // Adminler
                   if (filteredAdmins.isNotEmpty) ...[
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8),
@@ -642,8 +839,6 @@ class _AdminScreenState extends State<AdminScreen>
                         isDark)),
                     const SizedBox(height: 16),
                   ],
-
-                  // Normal kullanıcılar
                   if (filteredRegular.isNotEmpty) ...[
                     Padding(
                       padding: const EdgeInsets.only(bottom: 8),
@@ -663,7 +858,6 @@ class _AdminScreenState extends State<AdminScreen>
                         false,
                         isDark)),
                   ],
-
                   if (filteredAdmins.isEmpty && filteredRegular.isEmpty)
                     Center(
                       child: Padding(
@@ -672,8 +866,8 @@ class _AdminScreenState extends State<AdminScreen>
                           widget.strings.isEnglish
                               ? 'No users found'
                               : 'Kullanıcı bulunamadı',
-                          style: const TextStyle(
-                              color: AppColors.textGrey),
+                          style:
+                          const TextStyle(color: AppColors.textGrey),
                         ),
                       ),
                     ),
@@ -728,22 +922,22 @@ class _AdminScreenState extends State<AdminScreen>
                 Row(children: [
                   Flexible(
                     child: Text(
-                      displayName.isNotEmpty ? displayName : 'Kullanıcı',
+                      displayName.isNotEmpty ? displayName : email,
                       style: const TextStyle(
                           fontWeight: FontWeight.w600, fontSize: 14),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   if (isAdmin) ...[
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
                     Container(
                       padding: const EdgeInsets.symmetric(
                           horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
                         color: Colors.red.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: BorderRadius.circular(6),
                       ),
-                      child: const Text('ADMIN',
+                      child: const Text('Admin',
                           style: TextStyle(
                               color: Colors.red,
                               fontSize: 10,
@@ -753,7 +947,7 @@ class _AdminScreenState extends State<AdminScreen>
                 ]),
                 Text(email,
                     style: const TextStyle(
-                        color: AppColors.textGrey, fontSize: 12),
+                        fontSize: 12, color: AppColors.textGrey),
                     overflow: TextOverflow.ellipsis),
               ],
             ),
@@ -763,8 +957,7 @@ class _AdminScreenState extends State<AdminScreen>
               onPressed: () => _makeAdmin(userId, displayName),
               child: Text(
                 widget.strings.isEnglish ? 'Make Admin' : 'Admin Yap',
-                style: const TextStyle(
-                    color: AppColors.primary, fontSize: 12),
+                style: const TextStyle(fontSize: 12),
               ),
             ),
         ],
@@ -812,6 +1005,7 @@ class _AdminScreenState extends State<AdminScreen>
     }
   }
 
+  // ── Yardımcı widget'lar ───────────────────────────────────────────────────
   Widget _statBox(
       {required IconData icon,
         required String value,
@@ -826,8 +1020,8 @@ class _AdminScreenState extends State<AdminScreen>
                 fontWeight: FontWeight.bold,
                 color: AppColors.primary)),
         Text(label,
-            style: const TextStyle(
-                fontSize: 11, color: AppColors.textGrey)),
+            style:
+            const TextStyle(fontSize: 11, color: AppColors.textGrey)),
       ],
     );
   }
