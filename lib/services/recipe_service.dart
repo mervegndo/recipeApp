@@ -77,21 +77,14 @@ class RecipeService {
         .toList());
   }
 
-  // ─── Çok dilli tarif arama ────────────────────────────────────────────────
+  // ─── Arama ────────────────────────────────────────────────────────────────
   //
-  // 3 katmanlı strateji:
+  // searchTr = Türkçe başlık + Türkçe malzemeler (lowercase, tek string)
+  // searchEn = İngilizce başlık + İngilizce malzemeler (lowercase, tek string)
   //
-  // 1. Arayüz diline (langCode) göre Firestore prefix araması yap.
-  // 2. Sonuç boşsa → diğer dilde Firestore prefix araması yap (cross-lang).
-  // 3. Hâlâ boşsa → tüm tarifleri çek, title/description/ingredients içinde
-  //    .contains() ile client-side ara (reindex henüz yapılmamış tarifler için).
-  //
-  // Sonuç:
-  //   İngilizce modda "spicy"  → searchEn'de bulur       ✅
-  //   İngilizce modda "acılı"  → searchTr'de bulur       ✅
-  //   Türkçe modda "acılı"     → searchTr'de bulur       ✅
-  //   Türkçe modda "spicy"     → searchEn'de bulur       ✅
-  //   Hiç index yoksa          → title/ingredients'ta    ✅
+  // Kullanıcı ne yazarsa yazaısn (TR veya EN) her iki alana da .contains() ile bakılır.
+  // "dana etli" → searchTr içinde "dana etli" geçiyor mu?  ✅
+  // "beef stir"  → searchEn içinde "beef stir" geçiyor mu? ✅
 
   Future<List<RecipeModel>> searchRecipes(
       String query, {
@@ -101,75 +94,43 @@ class RecipeService {
     if (query.trim().isEmpty) return [];
 
     final q = query.trim().toLowerCase();
-    final primaryField = langCode == 'tr' ? 'searchTr' : 'searchEn';
-    final fallbackField = langCode == 'tr' ? 'searchEn' : 'searchTr';
 
-    // 1. Birincil dil
-    final primary = await _prefixSearch(q, primaryField, category);
-    if (primary.isNotEmpty) return primary;
-
-    // 2. Diğer dil (cross-lang fallback)
-    final fallback = await _prefixSearch(q, fallbackField, category);
-    if (fallback.isNotEmpty) return fallback;
-
-    // 3. Client-side contains (reindex yapılmamış eski tarifler)
-    return _clientSideSearch(q, category);
-  }
-
-  /// Firestore prefix araması
-  Future<List<RecipeModel>> _prefixSearch(
-      String q,
-      String field,
-      String? category,
-      ) async {
     try {
       Query<Map<String, dynamic>> ref = _firestore.collection('recipes');
+
       if (category != null && category != 'all') {
         ref = ref.where('category', isEqualTo: category);
       }
-      ref = ref
-          .where(field, isGreaterThanOrEqualTo: q)
-          .where(field, isLessThanOrEqualTo: '$q\uf8ff')
-          .limit(40);
 
-      final snapshot = await ref.get();
-      return snapshot.docs
-          .map((doc) => RecipeModel.fromMap(doc.data(), doc.id))
-          .toList();
-    } catch (_) {
-      return [];
-    }
-  }
-
-  /// Client-side contains araması — reindex yapılmamış tarifler için fallback
-  Future<List<RecipeModel>> _clientSideSearch(
-      String q,
-      String? category,
-      ) async {
-    try {
-      Query<Map<String, dynamic>> ref = _firestore.collection('recipes');
-      if (category != null && category != 'all') {
-        ref = ref.where('category', isEqualTo: category);
-      }
-      final snapshot = await ref.limit(200).get();
-      final all = snapshot.docs
+      final snapshot = await ref.limit(500).get();
+      final allRecipes = snapshot.docs
           .map((doc) => RecipeModel.fromMap(doc.data(), doc.id))
           .toList();
 
-      return all.where((r) {
-        final haystack = [
-          r.title,
-          r.description,
-          ...r.ingredients,
-          r.searchEn,
-          r.searchTr,
-        ].join(' ').toLowerCase();
-        return haystack.contains(q);
+      return allRecipes.where((recipe) {
+        // Her iki dil alanına da bak — kullanıcı hangi dilde yazarsa yazsın bulsun
+        return recipe.searchTr.contains(q) || recipe.searchEn.contains(q);
       }).toList();
-    } catch (_) {
+
+    } catch (e) {
+      debugPrint("Arama hatası: $e");
       return [];
     }
   }
+
+  // ─── Yardımcı: search string üretici ──────────────────────────────────────
+  //
+  // Sadece başlık + malzemeleri birleştirip lowercase yapar.
+  // Adımlar, açıklama dahil edilmez.
+
+  String _buildSearchString(String title, List<String> ingredients) {
+    return [title, ...ingredients]
+        .join(' ')
+        .toLowerCase()
+        .replaceAll(RegExp(r'[.,\/#!$%\^&\*;:{}=\-_`~()]'), '');
+  }
+
+  // ─── Tarif ekleme ──────────────────────────────────────────────────────────
 
   Future<void> addRecipe(RecipeModel recipe,
       {File? imageFile, Uint8List? imageBytes, String? imageUrl}) async {
@@ -200,8 +161,18 @@ class RecipeService {
       calories: recipe.calories,
       dietTags: recipe.dietTags,
       originalLanguage: recipe.originalLanguage,
-      searchEn: recipe.searchEn,
-      searchTr: recipe.searchTr,
+      translations: recipe.translations,
+      featured: recipe.featured,
+      featuredWeek: recipe.featuredWeek,
+      // Başlık + malzemelerden search string üret (TR ve EN ayrı ayrı)
+      searchTr: _buildSearchString(
+        recipe.localizedTitle('tr'),
+        recipe.localizedIngredients('tr'),
+      ),
+      searchEn: _buildSearchString(
+        recipe.localizedTitle('en'),
+        recipe.localizedIngredients('en'),
+      ),
     );
 
     await _firestore
@@ -209,6 +180,8 @@ class RecipeService {
         .doc(recipe.id)
         .set(recipeWithImage.toMap());
   }
+
+  // ─── Tarif güncelleme ──────────────────────────────────────────────────────
 
   Future<void> updateRecipe(RecipeModel recipe,
       {File? newImageFile, Uint8List? newImageBytes}) async {
@@ -232,8 +205,19 @@ class RecipeService {
       'difficulty': recipe.difficulty,
       'calories': recipe.calories,
       'dietTags': recipe.dietTags,
+      // Search stringlerini de güncelle
+      'searchTr': _buildSearchString(
+        recipe.localizedTitle('tr'),
+        recipe.localizedIngredients('tr'),
+      ),
+      'searchEn': _buildSearchString(
+        recipe.localizedTitle('en'),
+        recipe.localizedIngredients('en'),
+      ),
     });
   }
+
+  // ─── Tarif silme ───────────────────────────────────────────────────────────
 
   Future<void> deleteRecipe(String recipeId) async {
     try {
@@ -243,6 +227,8 @@ class RecipeService {
   }
 
   String generateId() => _uuid.v4();
+
+  // ─── Favori işlemleri ──────────────────────────────────────────────────────
 
   Future<void> toggleFavorite(
       String userId, String recipeId, bool isCurrentlyFavorite) async {
@@ -285,6 +271,8 @@ class RecipeService {
         .map((doc) => RecipeModel.fromMap(doc.data(), doc.id))
         .toList();
   }
+
+  // ─── Yorum işlemleri ───────────────────────────────────────────────────────
 
   Future<void> addComment({
     required String recipeId,
@@ -374,6 +362,8 @@ class RecipeService {
     await _updateAverageRating(recipeId);
   }
 
+  // ─── Admin işlemleri ───────────────────────────────────────────────────────
+
   Future<bool> isAdmin(String userId) async {
     final doc = await _firestore.collection('users').doc(userId).get();
     return doc.data()?['role'] == 'admin';
@@ -381,5 +371,63 @@ class RecipeService {
 
   Stream<QuerySnapshot> getAllUsers() {
     return _firestore.collection('users').snapshots();
+  }
+
+  // ─── Migration: Mevcut tarifleri güncelle ─────────────────────────────────
+  //
+  // Admin panelinden bir kez çalıştır.
+  // Her tarifin searchTr ve searchEn alanlarını
+  // "başlık + malzemeler" formatına günceller.
+
+  Future<void> migrateExistingRecipes() async {
+    try {
+      final snapshot = await _firestore.collection('recipes').get();
+      final docs = snapshot.docs;
+
+      // Firestore batch max 499 doc destekler, güvenli bölelim
+      for (int i = 0; i < docs.length; i += 499) {
+        final batch = _firestore.batch();
+        final chunk = docs.sublist(
+          i,
+          (i + 499) > docs.length ? docs.length : (i + 499),
+        );
+
+        for (var doc in chunk) {
+          final data = doc.data();
+          final originalLang = data['originalLanguage'] as String? ?? 'en';
+          final title = data['title'] as String? ?? '';
+          final ingredients = List<String>.from(data['ingredients'] ?? []);
+          final translations = Map<String, dynamic>.from(data['translations'] ?? {});
+          final trData = Map<String, dynamic>.from(translations['tr'] ?? {});
+          final enData = Map<String, dynamic>.from(translations['en'] ?? {});
+
+          // Türkçe: çevirisi varsa kullan, yoksa orijinal dil TR ise doğrudan kullan
+          final trTitle = trData['title'] as String? ??
+              (originalLang == 'tr' ? title : '');
+          final trIngredients = List<String>.from(
+            trData['ingredients'] ?? (originalLang == 'tr' ? ingredients : []),
+          );
+
+          // İngilizce: çevirisi varsa kullan, yoksa orijinal dil EN ise doğrudan kullan
+          final enTitle = enData['title'] as String? ??
+              (originalLang == 'en' ? title : title); // EN yoksa title'ı fallback yap
+          final enIngredients = List<String>.from(
+            enData['ingredients'] ?? ingredients,
+          );
+
+          batch.update(_firestore.collection('recipes').doc(doc.id), {
+            'searchTr': _buildSearchString(trTitle, trIngredients),
+            'searchEn': _buildSearchString(enTitle, enIngredients),
+          });
+        }
+
+        await batch.commit();
+        debugPrint('Migration: ${i + chunk.length}/${docs.length} tarif güncellendi');
+      }
+
+      debugPrint('Migration tamamlandı ✅');
+    } catch (e) {
+      debugPrint('Migration hatası: $e');
+    }
   }
 }
