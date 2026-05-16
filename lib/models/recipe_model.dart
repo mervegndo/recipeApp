@@ -25,13 +25,13 @@ class RecipeModel {
   final String originalLanguage;
   final Map<String, dynamic> translations;
 
-  // ─── YENİ: Arama index alanları ──────────────────────────────────────────
-  /// title + description + ingredients birleşimi — İngilizce, lowercase.
-  /// Cloud/client tarafından tarif kaydedilirken doldurulur.
+  // Arama index alanları
   final String searchEn;
-
-  /// title + description + ingredients birleşimi — Türkçe, lowercase.
   final String searchTr;
+
+  // ─── YENİ: Öne çıkarma ───────────────────────────────────────────────────
+  final bool featured;
+  final String? featuredWeek; // 'YYYY-WW' formatında
 
   RecipeModel({
     required this.id,
@@ -56,6 +56,8 @@ class RecipeModel {
     this.translations = const {},
     this.searchEn = '',
     this.searchTr = '',
+    this.featured = false,
+    this.featuredWeek,
   });
 
   // ─── Lokalizasyon getter'ları ─────────────────────────────────────────────
@@ -72,9 +74,7 @@ class RecipeModel {
   String localizedDescription(String languageCode) {
     if (languageCode == originalLanguage) return description;
     final t = translations[languageCode];
-    if (t != null &&
-        t['description'] != null &&
-        (t['description'] as String).isNotEmpty) {
+    if (t != null && t['description'] != null && (t['description'] as String).isNotEmpty) {
       return t['description'] as String;
     }
     return description;
@@ -129,9 +129,10 @@ class RecipeModel {
       ratingCount: map['ratingCount'] ?? 0,
       originalLanguage: map['originalLanguage'] ?? 'en',
       translations: Map<String, dynamic>.from(map['translations'] ?? {}),
-      // YENİ alanlar — eski dökümanlar için boş string'e fallback
       searchEn: map['searchEn'] ?? '',
       searchTr: map['searchTr'] ?? '',
+      featured: map['featured'] ?? false,
+      featuredWeek: map['featuredWeek'],
     );
   }
 
@@ -155,10 +156,10 @@ class RecipeModel {
       'averageRating': averageRating,
       'ratingCount': ratingCount,
       'originalLanguage': originalLanguage,
-      // translations Cloud Function tarafından yönetilir
-      // YENİ alanlar
       'searchEn': searchEn,
       'searchTr': searchTr,
+      'featured': featured,
+      'featuredWeek': featuredWeek,
     };
   }
 }
