@@ -49,10 +49,12 @@ class _AddRecipeScreenState extends State<AddRecipeScreen> {
 
   final List<Map<String, String>> _unitOptions = [
     {'key': 'tsp',  'en': 'tsp',          'tr': 'çay kaşığı'},
+    {'key': 'dsp',  'en': 'dsp',          'tr': 'tatlı kaşığı'},
     {'key': 'tbsp', 'en': 'tbsp',         'tr': 'yemek kaşığı'},
-    {'key': 'cup',  'en': 'cup',          'tr': 'bardak'},
-    {'key': 'glass','en': 'glass',        'tr': 'su bardağı'},
+    {'key': 'cup',  'en': 'cup',          'tr': 'su bardağı'},
+    {'key': 'tea cup','en': 'tea cup',        'tr': 'çay bardağı'},
     {'key': 'piece','en': 'piece',        'tr': 'adet'},
+    {'key': 'pack of','en': 'pack of',        'tr': 'paket'},
     {'key': 'g',    'en': 'g',            'tr': 'g'},
     {'key': 'kg',   'en': 'kg',           'tr': 'kg'},
     {'key': 'ml',   'en': 'ml',           'tr': 'ml'},

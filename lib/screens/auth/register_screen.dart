@@ -205,9 +205,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   decoration: InputDecoration(
                     labelText: s.isEnglish ? 'Full Name' : 'Ad Soyad',
                     prefixIcon: const Icon(Icons.person_outline),
-                    helperText: s.isEnglish
-                        ? 'Letters only, no numbers'
-                        : 'Yalnızca harf girilir, sayı girilmez',
                     helperStyle: const TextStyle(fontSize: 11),
                   ),
                   validator: (v) {
@@ -248,7 +245,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       return s.isEnglish ? 'Email cannot be empty' : 'E-posta boş olamaz';
                     }
                     final emailRegex =
-                    RegExp(r'^[\w.+\-]+@[a-zA-Z\d\-]+\.[a-zA-Z]{2,}$');
+                    RegExp(r'^[\w.+\-]+@([a-zA-Z\d\-]+\.)+[a-zA-Z]{2,}$');
                     if (!emailRegex.hasMatch(v.trim())) {
                       return s.isEnglish
                           ? 'Enter a valid email (e.g. name@mail.com)'

@@ -109,7 +109,9 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              if (emailController.text.trim().isEmpty) return;
+              if (emailController.text.trim().isEmpty) {
+                return;
+              }
               try {
                 await _authService.resetPassword(emailController.text.trim());
                 if (mounted) {
