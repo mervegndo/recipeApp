@@ -1,8 +1,11 @@
 // lib/screens/meal_planner/meal_planner_screen.dart
 //
 // Düzeltmeler:
-//  • AutomaticKeepAliveClientMixin → sayfadan çıkıp girilince sıfırlanmıyor
-//  • Tarif isimleri localizedTitle(langCode) ile gösteriliyor
+//  • _loadPlan() artık yüklemeden önce _plan'ı temizliyor — hafta geçişlerinde
+//    eski veriler kalmıyor
+//  • Firestore'dan tek seferlik okuma (realtime stream değil) —
+//    her açılışta güncel veri yükleniyor
+//  • _previousWeek / _nextWeek artık önce state'i günceller sonra yükler
 
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -20,11 +23,7 @@ class MealPlannerScreen extends StatefulWidget {
   State<MealPlannerScreen> createState() => _MealPlannerScreenState();
 }
 
-class _MealPlannerScreenState extends State<MealPlannerScreen>
-    with AutomaticKeepAliveClientMixin {
-  @override
-  bool get wantKeepAlive => true;
-
+class _MealPlannerScreenState extends State<MealPlannerScreen> {
   final _recipeService = RecipeService();
   final _db = FirebaseFirestore.instance;
   late final String _uid;
@@ -54,7 +53,16 @@ class _MealPlannerScreenState extends State<MealPlannerScreen>
 
   Future<void> _loadPlan() async {
     if (_uid.isEmpty) return;
-    setState(() => _isLoading = true);
+
+    // Yükleme başlamadan önce mevcut planı temizle
+    if (mounted) {
+      setState(() {
+        _isLoading = true;
+        _plan = {};         // ← KRİTİK: hafta değişince eski veriyi sil
+        _recipeCache = {};  // ← Cache de temizleniyor
+      });
+    }
+
     try {
       final doc = await _db
           .collection('users')
@@ -62,10 +70,26 @@ class _MealPlannerScreenState extends State<MealPlannerScreen>
           .collection('mealPlan')
           .doc('plan')
           .get();
+
       if (doc.exists) {
         final data = doc.data() as Map<String, dynamic>;
-        _plan = data.map((k, v) => MapEntry(k, v.toString()));
-        for (final recipeId in _plan.values.toSet()) {
+        // Tüm plan'ı yükle (haftalık filtre UI'da yapılıyor)
+        final newPlan = data.map((k, v) => MapEntry(k, v.toString()));
+
+        // Bu haftaya ait tarif ID'lerini bul
+        final thisWeekIds = <String>{};
+        final days = List.generate(7, (i) => _weekStart.add(Duration(days: i)));
+        for (final day in days) {
+          for (final mealKey in ['breakfast', 'lunch', 'dinner']) {
+            final key = _dayKey(day, mealKey);
+            if (newPlan.containsKey(key)) {
+              thisWeekIds.add(newPlan[key]!);
+            }
+          }
+        }
+
+        // Sadece bu hafta gereken tarifleri önbelleğe al
+        for (final recipeId in thisWeekIds) {
           if (!_recipeCache.containsKey(recipeId)) {
             final snap = await _db.collection('recipes').doc(recipeId).get();
             if (snap.exists) {
@@ -73,14 +97,28 @@ class _MealPlannerScreenState extends State<MealPlannerScreen>
             }
           }
         }
+
+        if (mounted) setState(() => _plan = newPlan);
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('MealPlanner _loadPlan error: $e');
+    }
+
     if (mounted) setState(() => _isLoading = false);
   }
 
   Future<void> _savePlan() async {
     if (_uid.isEmpty) return;
-    await _db.collection('users').doc(_uid).collection('mealPlan').doc('plan').set(_plan);
+    try {
+      await _db
+          .collection('users')
+          .doc(_uid)
+          .collection('mealPlan')
+          .doc('plan')
+          .set(_plan);
+    } catch (e) {
+      debugPrint('MealPlanner _savePlan error: $e');
+    }
   }
 
   Future<void> _assignMeal(DateTime date, String mealType) async {
@@ -95,7 +133,7 @@ class _MealPlannerScreenState extends State<MealPlannerScreen>
       builder: (_) => _RecipePickerSheet(recipes: allRecipes, strings: s),
     );
 
-    if (selected != null) {
+    if (selected != null && mounted) {
       final key = _dayKey(date, mealType);
       setState(() {
         _plan[key] = selected.id;
@@ -111,12 +149,16 @@ class _MealPlannerScreenState extends State<MealPlannerScreen>
   }
 
   void _previousWeek() {
-    setState(() => _weekStart = _weekStart.subtract(const Duration(days: 7)));
+    setState(() {
+      _weekStart = _weekStart.subtract(const Duration(days: 7));
+    });
     _loadPlan();
   }
 
   void _nextWeek() {
-    setState(() => _weekStart = _weekStart.add(const Duration(days: 7)));
+    setState(() {
+      _weekStart = _weekStart.add(const Duration(days: 7));
+    });
     _loadPlan();
   }
 
@@ -130,7 +172,6 @@ class _MealPlannerScreenState extends State<MealPlannerScreen>
 
   @override
   Widget build(BuildContext context) {
-    super.build(context); // AutomaticKeepAlive için gerekli
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final s = widget.strings;
     final days = List.generate(7, (i) => _weekStart.add(Duration(days: i)));
@@ -146,94 +187,136 @@ class _MealPlannerScreenState extends State<MealPlannerScreen>
       backgroundColor: isDark ? AppColors.darkBackground : AppColors.background,
       appBar: AppBar(
         backgroundColor: isDark ? AppColors.darkBackground : AppColors.background,
-        title: Text(s.isEnglish ? 'Meal Planner' : 'Haftalık Menü',
-            style: TextStyle(fontWeight: FontWeight.w700,
-                color: isDark ? AppColors.darkTextDark : AppColors.textDark)),
+        title: Text(
+          s.isEnglish ? 'Meal Planner' : 'Haftalık Menü',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            color: isDark ? AppColors.darkTextDark : AppColors.textDark,
+          ),
+        ),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Column(children: [
-        // Hafta navigasyonu
+        // ── Hafta navigasyonu ──
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
           decoration: BoxDecoration(
             color: isDark ? AppColors.darkCard : AppColors.surface,
-            border: Border(bottom: BorderSide(
-                color: isDark ? const Color(0xFF3D3530) : AppColors.outline)),
+            border: Border(
+              bottom: BorderSide(
+                color: isDark ? const Color(0xFF3D3530) : AppColors.outline,
+              ),
+            ),
           ),
-          child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-            IconButton(
-              onPressed: _previousWeek,
-              icon: const Icon(Icons.chevron_left_rounded),
-              color: isDark ? AppColors.darkTextDark : AppColors.textDark,
-            ),
-            Text(_weekLabel(),
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
-                    color: isDark ? AppColors.darkTextDark : AppColors.textDark)),
-            IconButton(
-              onPressed: _nextWeek,
-              icon: const Icon(Icons.chevron_right_rounded),
-              color: isDark ? AppColors.darkTextDark : AppColors.textDark,
-            ),
-          ]),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              IconButton(
+                onPressed: _previousWeek,
+                icon: const Icon(Icons.chevron_left_rounded),
+                color: isDark ? AppColors.darkTextDark : AppColors.textDark,
+              ),
+              Text(
+                _weekLabel(),
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? AppColors.darkTextDark : AppColors.textDark,
+                ),
+              ),
+              IconButton(
+                onPressed: _nextWeek,
+                icon: const Icon(Icons.chevron_right_rounded),
+                color: isDark ? AppColors.darkTextDark : AppColors.textDark,
+              ),
+            ],
+          ),
         ),
 
+        // ── Plan listesi ──
         Expanded(
           child: ListView.builder(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.only(bottom: 32),
             itemCount: days.length,
             itemBuilder: (ctx, di) {
               final day = days[di];
-              final isToday = day.day == DateTime.now().day &&
-                  day.month == DateTime.now().month &&
-                  day.year == DateTime.now().year;
+              final isToday = _isSameDay(day, DateTime.now());
 
               return Container(
-                margin: const EdgeInsets.only(bottom: 12),
+                margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                 decoration: BoxDecoration(
                   color: isDark ? AppColors.darkCard : AppColors.surface,
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
                     color: isToday
-                        ? AppColors.primary.withOpacity(0.5)
+                        ? AppColors.primary.withOpacity(0.4)
                         : (isDark ? const Color(0xFF3D3530) : AppColors.outline),
-                    width: isToday ? 2 : 1,
+                    width: isToday ? 1.5 : 1,
                   ),
                 ),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                child: Column(children: [
                   // Gün başlığı
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                    decoration: BoxDecoration(
-                      color: isToday ? AppColors.primary.withOpacity(0.08) : Colors.transparent,
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(15)),
-                    ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
                     child: Row(children: [
                       Container(
-                        width: 32, height: 32,
+                        width: 32,
+                        height: 32,
                         decoration: BoxDecoration(
-                          color: isToday ? AppColors.primary
-                              : (isDark ? AppColors.darkBackground : AppColors.surfaceContainer),
-                          shape: BoxShape.circle,
+                          color: isToday
+                              ? AppColors.primary
+                              : (isDark
+                              ? const Color(0xFF3D3530)
+                              : AppColors.outline.withOpacity(0.4)),
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Center(child: Text('${day.day}',
+                        child: Center(
+                          child: Text(
+                            '${day.day}',
                             style: TextStyle(
-                              fontSize: 13, fontWeight: FontWeight.w700,
-                              color: isToday ? Colors.white : (isDark ? AppColors.darkTextDark : AppColors.textDark),
-                            ))),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: isToday
+                                  ? Colors.white
+                                  : (isDark
+                                  ? AppColors.darkTextDark
+                                  : AppColors.textDark),
+                            ),
+                          ),
+                        ),
                       ),
                       const SizedBox(width: 10),
-                      Text(dayNames[di], style: TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w700,
-                        color: isToday ? AppColors.primary : (isDark ? AppColors.darkTextDark : AppColors.textDark),
-                      )),
+                      Text(
+                        dayNames[di],
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: isToday
+                              ? AppColors.primary
+                              : (isDark
+                              ? AppColors.darkTextDark
+                              : AppColors.textDark),
+                        ),
+                      ),
                       if (isToday) ...[
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(color: AppColors.primary, borderRadius: BorderRadius.circular(999)),
-                          child: Text(s.isEnglish ? 'Today' : 'Bugün',
-                              style: const TextStyle(fontSize: 10, color: Colors.white, fontWeight: FontWeight.w700)),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            s.isEnglish ? 'Today' : 'Bugün',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                         ),
                       ],
                     ]),
@@ -243,61 +326,107 @@ class _MealPlannerScreenState extends State<MealPlannerScreen>
                   ...List.generate(3, (mi) {
                     final key      = _dayKey(day, mealKeys[mi]);
                     final recipeId = _plan[key];
-                    final recipe   = recipeId != null ? _recipeCache[recipeId] : null;
-                    // ── FIX: lokalize tarif ismi ──
+                    final recipe   = recipeId != null
+                        ? _recipeCache[recipeId]
+                        : null;
                     final recipeTitle = recipe?.localizedTitle(_langCode);
 
                     return Column(children: [
-                      Divider(height: 1,
-                          color: isDark ? const Color(0xFF3D3530) : AppColors.outline.withOpacity(0.5)),
+                      Divider(
+                        height: 1,
+                        color: isDark
+                            ? const Color(0xFF3D3530)
+                            : AppColors.outline.withOpacity(0.5),
+                      ),
                       Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 10),
                         child: Row(children: [
                           SizedBox(
                             width: 62,
-                            child: Text(mealTypes[mi],
-                                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
-                                    color: isDark ? AppColors.darkTextGrey : AppColors.textGrey)),
+                            child: Text(
+                              mealTypes[mi],
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: isDark
+                                    ? AppColors.darkTextGrey
+                                    : AppColors.textGrey,
+                              ),
+                            ),
                           ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: recipe == null
                                 ? GestureDetector(
-                              onTap: () => _assignMeal(day, mealKeys[mi]),
+                              onTap: () =>
+                                  _assignMeal(day, mealKeys[mi]),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 8, horizontal: 12),
                                 decoration: BoxDecoration(
-                                  color: AppColors.primary.withOpacity(0.06),
-                                  borderRadius: BorderRadius.circular(10),
-                                  border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+                                  color: AppColors.primary
+                                      .withOpacity(0.06),
+                                  borderRadius:
+                                  BorderRadius.circular(10),
+                                  border: Border.all(
+                                    color: AppColors.primary
+                                        .withOpacity(0.2),
+                                  ),
                                 ),
                                 child: Row(children: [
-                                  Icon(Icons.add_rounded, size: 16,
-                                      color: AppColors.primary.withOpacity(0.7)),
+                                  Icon(Icons.add_rounded,
+                                      size: 16,
+                                      color: AppColors.primary
+                                          .withOpacity(0.7)),
                                   const SizedBox(width: 6),
-                                  Text(s.isEnglish ? 'Add recipe' : 'Tarif ekle',
-                                      style: TextStyle(fontSize: 13,
-                                          color: AppColors.primary.withOpacity(0.7))),
+                                  Text(
+                                    s.isEnglish
+                                        ? 'Add recipe'
+                                        : 'Tarif ekle',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: AppColors.primary
+                                          .withOpacity(0.7),
+                                    ),
+                                  ),
                                 ]),
                               ),
                             )
                                 : GestureDetector(
-                              onTap: () => Navigator.push(context, MaterialPageRoute(
-                                builder: (_) => RecipeDetailScreen(recipe: recipe, strings: widget.strings),
-                              )),
+                              onTap: () => Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => RecipeDetailScreen(
+                                    recipe: recipe,
+                                    strings: widget.strings,
+                                  ),
+                                ),
+                              ),
                               child: Container(
-                                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 8, horizontal: 12),
                                 decoration: BoxDecoration(
                                   gradient: const LinearGradient(
-                                    colors: [Color(0xFFCB490E), Color(0xFFE8784A)],
-                                    begin: Alignment.topLeft, end: Alignment.bottomRight,
+                                    colors: [
+                                      Color(0xFFCB490E),
+                                      Color(0xFFE8784A)
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
                                   ),
-                                  borderRadius: BorderRadius.circular(10),
+                                  borderRadius:
+                                  BorderRadius.circular(10),
                                 ),
-                                child: Text(recipeTitle ?? '',
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                        fontSize: 13, color: Colors.white, fontWeight: FontWeight.w600)),
+                                child: Text(
+                                  recipeTitle ?? '',
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
@@ -305,8 +434,13 @@ class _MealPlannerScreenState extends State<MealPlannerScreen>
                             const SizedBox(width: 8),
                             GestureDetector(
                               onTap: () => _removeMeal(key),
-                              child: Icon(Icons.close_rounded, size: 18,
-                                  color: isDark ? AppColors.darkTextGrey : AppColors.textGrey),
+                              child: Icon(
+                                Icons.close_rounded,
+                                size: 18,
+                                color: isDark
+                                    ? AppColors.darkTextGrey
+                                    : AppColors.textGrey,
+                              ),
                             ),
                           ],
                         ]),
@@ -321,9 +455,12 @@ class _MealPlannerScreenState extends State<MealPlannerScreen>
       ]),
     );
   }
+
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
 }
 
-// ─── Tarif seçici bottom sheet ───────────────────────────────────────────────
+// ─── Tarif seçici bottom sheet ────────────────────────────────────────────────
 
 class _RecipePickerSheet extends StatefulWidget {
   final List<RecipeModel> recipes;
@@ -343,8 +480,12 @@ class _RecipePickerSheetState extends State<_RecipePickerSheet> {
     final langCode = widget.strings.isEnglish ? 'en' : 'tr';
     final filtered = _query.isEmpty
         ? widget.recipes
-        : widget.recipes.where((r) =>
-        r.localizedTitle(langCode).toLowerCase().contains(_query.toLowerCase())).toList();
+        : widget.recipes
+        .where((r) => r
+        .localizedTitle(langCode)
+        .toLowerCase()
+        .contains(_query.toLowerCase()))
+        .toList();
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.8,
@@ -354,8 +495,14 @@ class _RecipePickerSheetState extends State<_RecipePickerSheet> {
       ),
       child: Column(children: [
         const SizedBox(height: 12),
-        Container(width: 40, height: 4,
-            decoration: BoxDecoration(color: AppColors.outline, borderRadius: BorderRadius.circular(2))),
+        Container(
+          width: 40,
+          height: 4,
+          decoration: BoxDecoration(
+            color: AppColors.outline,
+            borderRadius: BorderRadius.circular(2),
+          ),
+        ),
         const SizedBox(height: 16),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -363,31 +510,88 @@ class _RecipePickerSheetState extends State<_RecipePickerSheet> {
             autofocus: true,
             onChanged: (v) => setState(() => _query = v),
             decoration: InputDecoration(
-              hintText: widget.strings.isEnglish ? 'Search recipe...' : 'Tarif ara...',
+              hintText: widget.strings.isEnglish
+                  ? 'Search recipe...'
+                  : 'Tarif ara...',
               prefixIcon: const Icon(Icons.search_rounded),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
               filled: true,
-              fillColor: isDark ? AppColors.darkCard : AppColors.surfaceContainer,
+              fillColor: isDark
+                  ? AppColors.darkCard
+                  : AppColors.surfaceContainer,
             ),
           ),
         ),
         const SizedBox(height: 8),
         Expanded(
-          child: ListView.builder(
-            itemCount: filtered.length,
-            itemBuilder: (ctx, i) => ListTile(
-              title: Text(filtered[i].localizedTitle(langCode)),
-              subtitle: Text(AppCategories.getLabelByKey(filtered[i].category, isEnglish: widget.strings.isEnglish)),
-              leading: Container(
-                width: 40, height: 40,
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.restaurant_outlined, color: AppColors.primary, size: 20),
+          child: filtered.isEmpty
+              ? Center(
+            child: Text(
+              widget.strings.isEnglish
+                  ? 'No recipes found'
+                  : 'Tarif bulunamadı',
+              style: TextStyle(
+                color: isDark
+                    ? AppColors.darkTextGrey
+                    : AppColors.textGrey,
               ),
-              onTap: () => Navigator.pop(ctx, filtered[i]),
             ),
+          )
+              : ListView.builder(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            itemCount: filtered.length,
+            itemBuilder: (_, i) {
+              final recipe = filtered[i];
+              return ListTile(
+                contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 4, vertical: 4),
+                leading: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: recipe.imageUrl != null
+                      ? Image.network(
+                    recipe.imageUrl!,
+                    width: 52,
+                    height: 52,
+                    fit: BoxFit.cover,
+                  )
+                      : Container(
+                    width: 52,
+                    height: 52,
+                    color: isDark
+                        ? AppColors.darkCard
+                        : AppColors.surfaceContainer,
+                    child: const Icon(Icons.restaurant_rounded,
+                        color: AppColors.textGrey),
+                  ),
+                ),
+                title: Text(
+                  recipe.localizedTitle(langCode),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: isDark
+                        ? AppColors.darkTextDark
+                        : AppColors.textDark,
+                  ),
+                ),
+                subtitle: Text(
+                  AppCategories.getLabelByKey(
+                    recipe.category,
+                    isEnglish: widget.strings.isEnglish,
+                  ),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isDark
+                        ? AppColors.darkTextGrey
+                        : AppColors.textGrey,
+                  ),
+                ),
+                onTap: () => Navigator.pop(context, recipe),
+              );
+            },
           ),
         ),
       ]),
