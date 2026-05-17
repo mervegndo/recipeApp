@@ -88,19 +88,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
     final nowFavorite = !_isFavorite;
     setState(() => _isFavorite = nowFavorite);
 
-    if (nowFavorite && !_isOwner) {
-      final userDoc = await FirebaseFirestore.instance
-          .collection('users').doc(user.uid).get();
-      final fromName = userDoc.data()?['displayName'] as String?
-          ?? user.displayName ?? user.email?.split('@').first ?? 'Someone';
-      await _notifService.sendNotification(
-        toUserId: widget.recipe.userId,
-        fromUserName: fromName,
-        type: 'favorite',
-        recipeId: widget.recipe.id,
-        recipeTitle: widget.recipe.title,
-      );
-    }
+   
   }
 
   void _showGuestWarning() {
@@ -199,14 +187,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
       text: commentText, rating: _userRating,
     );
 
-    if (!_isOwner) {
-      await _notifService.sendNotification(
-        toUserId: recipe.userId, fromUserName: displayName,
-        type: 'comment', recipeId: recipe.id, recipeTitle: recipe.title,
-        commentText: commentText, rating: _userRating,
-      );
-    }
-
+  
     _commentController.clear();
     setState(() => _userRating = 0);
     if (mounted) {
