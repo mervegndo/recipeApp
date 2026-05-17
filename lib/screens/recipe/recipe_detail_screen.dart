@@ -92,10 +92,33 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
   }
 
   void _showGuestWarning() {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(widget.strings.guestWarning),
-      backgroundColor: AppColors.primary,
-    ));
+    final s = widget.strings;
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(s.loginRequired),
+        content: Text(s.loginRequiredMsg),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(s.cancel),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              Navigator.popUntil(context, (route) => route.isFirst);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text(s.login),
+          ),
+        ],
+      ),
+    );
   }
 
   // ─── Paylaş ──────────────────────────────────────────────────────────────
@@ -696,10 +719,17 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
       ]),
       const SizedBox(height: 10),
       Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-        Expanded(child: TextField(
-          controller: _commentController,
-          minLines: 1, maxLines: 3,
-          decoration: InputDecoration(hintText: s.writeComment),
+        // YENİ - misafirse tıklayınca dialog aç
+        Expanded(child: GestureDetector(
+          onTap: widget.isGuest ? _showGuestWarning : null,
+          child: AbsorbPointer(
+            absorbing: widget.isGuest,
+            child: TextField(
+              controller: _commentController,
+              minLines: 1, maxLines: 3,
+              decoration: InputDecoration(hintText: s.writeComment),
+            ),
+          ),
         )),
         const SizedBox(width: 10),
         GestureDetector(
