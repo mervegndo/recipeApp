@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- android/app/src/main/res/values/colors.xml -->
+<!-- Bu dosyayı oluşturun (yoksa) veya mevcut dosyaya ekleyin -->
+<resources>
+    <color name="gusto_primary">#A53600</color>
+</resources>
