@@ -18,6 +18,9 @@ class RecipeDetailScreen extends StatefulWidget {
   final bool isGuest;
   final bool isAdmin;
   final AppStrings strings;
+  /// Misafir "Giriş Yap" butonuna basınca çağrılır.
+  /// home_screen.dart'tan widget.onExitGuest olarak geçilmeli.
+  final VoidCallback? onExitGuest;
 
   const RecipeDetailScreen({
     super.key,
@@ -25,6 +28,7 @@ class RecipeDetailScreen extends StatefulWidget {
     this.isGuest = false,
     this.isAdmin = false,
     required this.strings,
+    this.onExitGuest,
   });
 
   @override
@@ -81,17 +85,16 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
   }
 
   Future<void> _toggleFavorite() async {
-    if (widget.isGuest) { _showGuestWarning(); return; }
+    if (widget.isGuest) { _showGuestDialog(); return; }
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     await _recipeService.toggleFavorite(user.uid, widget.recipe.id, _isFavorite);
-    final nowFavorite = !_isFavorite;
-    setState(() => _isFavorite = nowFavorite);
-
-   
+    setState(() => _isFavorite = !_isFavorite);
   }
 
-  void _showGuestWarning() {
+  // ─── Favori/paylaş gibi işlemler için dialog ──────────────────────────────
+
+  void _showGuestDialog() {
     final s = widget.strings;
     showDialog(
       context: context,
@@ -105,20 +108,25 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
             child: Text(s.cancel),
           ),
           ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.popUntil(context, (route) => route.isFirst);
-            },
+            onPressed: () { Navigator.pop(context); _goToLogin(); },
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
             child: Text(s.login),
           ),
         ],
       ),
     );
+  }
+
+  // ─── Login'e yönlendir ────────────────────────────────────────────────────
+
+  void _goToLogin() {
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    widget.onExitGuest?.call();
   }
 
   // ─── Paylaş ──────────────────────────────────────────────────────────────
@@ -136,14 +144,16 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
           padding: const EdgeInsets.symmetric(vertical: 16),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Container(width: 40, height: 4,
-                decoration: BoxDecoration(color: AppColors.outline, borderRadius: BorderRadius.circular(2))),
+                decoration: BoxDecoration(color: AppColors.outline,
+                    borderRadius: BorderRadius.circular(2))),
             const SizedBox(height: 16),
             Text(s.isEnglish ? 'Share Recipe' : 'Tarifi Paylaş',
                 style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700,
                     color: isDark ? AppColors.darkTextDark : AppColors.textDark)),
             const SizedBox(height: 6),
             Text(recipe.title, textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: isDark ? AppColors.darkTextGrey : AppColors.textGrey)),
+                style: TextStyle(fontSize: 13,
+                    color: isDark ? AppColors.darkTextGrey : AppColors.textGrey)),
             const SizedBox(height: 20),
             Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
               _ShareOption(
@@ -152,8 +162,8 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                 color: AppColors.primary,
                 onTap: () {
                   Navigator.pop(context);
-                  final link = 'https://gusto.app/recipe/${recipe.id}';
-                  Clipboard.setData(ClipboardData(text: link));
+                  Clipboard.setData(ClipboardData(
+                      text: 'https://gusto.app/recipe/${recipe.id}'));
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                     content: Text(s.isEnglish ? 'Link copied!' : 'Link kopyalandı!'),
                     backgroundColor: Colors.green,
@@ -172,7 +182,7 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                       : '"${recipe.title}" tarifine Gusto\'dan bak!\nhttps://gusto.app/recipe/${recipe.id}';
                   Clipboard.setData(ClipboardData(text: text));
                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                    content: Text(s.isEnglish ? 'Copied to clipboard!' : 'Panoya kopyalandı!'),
+                    content: Text(s.isEnglish ? 'Copied!' : 'Kopyalandı!'),
                     backgroundColor: Colors.green,
                     duration: const Duration(seconds: 2),
                   ));
@@ -186,20 +196,23 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
     );
   }
 
-  // ─── Yorum ───────────────────────────────────────────────────────────────
+  // ─── Yorum gönder ────────────────────────────────────────────────────────
 
   Future<void> _submitComment(RecipeModel recipe) async {
-    if (widget.isGuest) { _showGuestWarning(); return; }
+    if (widget.isGuest) { _showGuestDialog(); return; }
     if (_commentController.text.trim().isEmpty) return;
     if (_userRating == 0) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(widget.strings.isEnglish ? 'Please give a rating!' : 'Lütfen bir puan verin!'),
+        content: Text(widget.strings.isEnglish
+            ? 'Please give a rating!'
+            : 'Lütfen bir puan verin!'),
       ));
       return;
     }
 
     final user = FirebaseAuth.instance.currentUser!;
-    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users').doc(user.uid).get();
     final displayName = userDoc.data()?['displayName'] as String?
         ?? user.displayName ?? user.email?.split('@').first ?? 'User';
     final commentText = _commentController.text.trim();
@@ -210,272 +223,307 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
       text: commentText, rating: _userRating,
     );
 
-  
     _commentController.clear();
     setState(() => _userRating = 0);
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(widget.strings.commentAdded), backgroundColor: Colors.green,
+        content: Text(widget.strings.commentAdded),
+        backgroundColor: Colors.green,
       ));
     }
   }
 
-  // ─── Porsiyon ölçek ───────────────────────────────────────────────────────
-
-  String _scaleIngredient(String ingredient) {
-    final orig = widget.recipe.servings;
-    if (orig == _servingMultiplier || orig == 0) return ingredient;
-    final ratio = _servingMultiplier / orig;
-    return ingredient.replaceAllMapped(RegExp(r'(\d+(?:[.,]\d+)?)'), (m) {
-      final v = double.tryParse(m.group(1)!.replaceAll(',', '.'));
-      if (v == null) return m.group(0)!;
-      final scaled = v * ratio;
-      return scaled == scaled.roundToDouble()
-          ? scaled.toInt().toString()
-          : scaled.toStringAsFixed(1).replaceAll(RegExp(r'\.0$'), '');
-    });
-  }
-
-  String _currentWeekKey() {
-    final now = DateTime.now();
-    final startOfYear = DateTime(now.year, 1, 1);
-    final week = ((now.difference(startOfYear).inDays + startOfYear.weekday - 1) / 7).ceil();
-    return '${now.year}-${week.toString().padLeft(2, '0')}';
-  }
-
-  // ─── BUILD ────────────────────────────────────────────────────────────────
+  // ─── Build ────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    final isDark   = Theme.of(context).brightness == Brightness.dark;
-    final s        = widget.strings;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final s = widget.strings;
     final langCode = s.isEnglish ? 'en' : 'tr';
-    final bgColor  = isDark ? AppColors.darkBackground : AppColors.background;
 
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance
           .collection('recipes').doc(widget.recipe.id).snapshots(),
-      builder: (context, recipeSnap) {
-        RecipeModel recipe = widget.recipe;
-        if (recipeSnap.hasData && recipeSnap.data!.exists) {
-          final data = recipeSnap.data!.data() as Map<String, dynamic>?;
-          if (data != null) recipe = RecipeModel.fromMap(data, widget.recipe.id);
-        }
+      builder: (ctx, snap) {
+        final data = snap.data?.data() as Map<String, dynamic>?;
+        final recipe = data != null
+            ? RecipeModel.fromMap(data, widget.recipe.id)
+            : widget.recipe;
 
         final localIngredients = recipe.localizedIngredients(langCode);
 
         return Scaffold(
-          backgroundColor: bgColor,
+          backgroundColor: isDark ? AppColors.darkBackground : AppColors.background,
           body: CustomScrollView(
             slivers: [
-
-              // ── AppBar ─────────────────────────────────────────────────────
+              // ── App bar ───────────────────────────────────────────────────
               SliverAppBar(
-                expandedHeight: 300,
+                expandedHeight: 280,
                 pinned: true,
-                backgroundColor: isDark ? AppColors.darkBackground : AppColors.background,
-                iconTheme: const IconThemeData(color: Colors.white),
-                actions: [
-                  // Paylaş butonu (her zaman)
-                  IconButton(
-                    icon: const Icon(Icons.ios_share_rounded, color: Colors.white),
-                    onPressed: () => _showShareSheet(recipe),
-                    tooltip: s.isEnglish ? 'Share' : 'Paylaş',
+                backgroundColor: isDark ? AppColors.darkBackground : Colors.white,
+                leading: GestureDetector(
+                  onTap: () => Navigator.pop(context),
+                  child: Container(
+                    margin: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.35),
+                        shape: BoxShape.circle),
+                    child: const Icon(Icons.arrow_back_ios_new_rounded,
+                        color: Colors.white, size: 18),
                   ),
-                  // Favori
-                  if (!widget.isGuest)
-                    IconButton(
-                      icon: Icon(
-                        _isFavorite ? Icons.favorite : Icons.favorite_border,
+                ),
+                actions: [
+                  GestureDetector(
+                    onTap: () => _showShareSheet(recipe),
+                    child: Container(
+                      margin: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.35),
+                          shape: BoxShape.circle),
+                      child: const Icon(Icons.ios_share_rounded,
+                          color: Colors.white, size: 18),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: _toggleFavorite,
+                    child: Container(
+                      margin: const EdgeInsets.all(8),
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.35),
+                          shape: BoxShape.circle),
+                      child: Icon(
+                        _isFavorite
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
                         color: _isFavorite ? Colors.red : Colors.white,
+                        size: 18,
                       ),
-                      onPressed: _toggleFavorite,
                     ),
-                  // Düzenle
-                  if (_isOwner)
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined, color: Colors.white),
-                      onPressed: () => Navigator.push(context, MaterialPageRoute(
-                        builder: (_) => EditRecipeScreen(recipe: recipe, strings: widget.strings),
-                      )),
-                    ),
-                  // Sil
+                  ),
                   if (_isOwner || widget.isAdmin)
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.white),
-                      onPressed: () async {
-                        final ok = await showDialog<bool>(
-                          context: context,
-                          builder: (_) => AlertDialog(
-                            title: Text(s.deleteRecipeTitle),
-                            content: Text(s.deleteRecipeConfirm),
-                            actions: [
-                              TextButton(onPressed: () => Navigator.pop(context, false), child: Text(s.cancel)),
-                              TextButton(onPressed: () => Navigator.pop(context, true),
-                                  child: Text(s.delete, style: const TextStyle(color: Colors.red))),
-                            ],
-                          ),
-                        );
-                        if (ok == true && mounted) {
-                          await _recipeService.deleteRecipe(widget.recipe.id);
-                          if (mounted) Navigator.pop(context);
+                    PopupMenuButton<String>(
+                      icon: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(0.35),
+                            shape: BoxShape.circle),
+                        child: const Icon(Icons.more_vert_rounded,
+                            color: Colors.white, size: 18),
+                      ),
+                      onSelected: (val) async {
+                        if (val == 'edit') {
+                          await Navigator.push(context, MaterialPageRoute(
+                              builder: (_) => EditRecipeScreen(
+                                  recipe: recipe, strings: widget.strings)));
+                        } else if (val == 'delete') {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (_) => AlertDialog(
+                              title: Text(s.deleteRecipeTitle),
+                              content: Text(s.deleteRecipeConfirm),
+                              actions: [
+                                TextButton(
+                                    onPressed: () => Navigator.pop(context, false),
+                                    child: Text(s.cancel)),
+                                ElevatedButton(
+                                    onPressed: () => Navigator.pop(context, true),
+                                    style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.red),
+                                    child: Text(s.delete)),
+                              ],
+                            ),
+                          );
+                          if (confirm == true) {
+                            await _recipeService.deleteRecipe(recipe.id);
+                            if (mounted) Navigator.pop(context);
+                          }
                         }
                       },
+                      itemBuilder: (_) => [
+                        PopupMenuItem(value: 'edit',
+                            child: Row(children: [
+                              const Icon(Icons.edit_outlined, size: 18),
+                              const SizedBox(width: 8), Text(s.edit),
+                            ])),
+                        PopupMenuItem(value: 'delete',
+                            child: Row(children: [
+                              const Icon(Icons.delete_outline,
+                                  size: 18, color: Colors.red),
+                              const SizedBox(width: 8),
+                              Text(s.delete,
+                                  style: const TextStyle(color: Colors.red)),
+                            ])),
+                      ],
                     ),
-                  // Admin: öne çıkar
-                  if (widget.isAdmin)
-                    IconButton(
-                      icon: Icon(
-                        recipe.featured ? Icons.star_rounded : Icons.star_outline_rounded,
-                        color: recipe.featured ? Colors.amber : Colors.white,
-                      ),
-                      tooltip: recipe.featured
-                          ? (s.isEnglish ? 'Remove from Featured' : 'Öne Çıkarmayı Kaldır')
-                          : (s.isEnglish ? 'Feature This Week' : 'Bu Hafta Öne Çıkar'),
-                      onPressed: () async {
-                        await FirebaseFirestore.instance
-                            .collection('recipes').doc(recipe.id).update({
-                          'featured': !recipe.featured,
-                          'featuredWeek': !recipe.featured ? _currentWeekKey() : null,
-                        });
-                      },
-                    ),
+                  const SizedBox(width: 4),
                 ],
                 flexibleSpace: FlexibleSpaceBar(
                   background: recipe.imageUrl != null
                       ? CachedNetworkImage(
-                      imageUrl: recipe.imageUrl!, fit: BoxFit.cover,
-                      errorWidget: (_, __, ___) => _placeholderHeader(isDark))
-                      : _placeholderHeader(isDark),
+                    imageUrl: recipe.imageUrl!,
+                    fit: BoxFit.cover,
+                    errorWidget: (_, __, ___) => _imagePlaceholder(isDark),
+                  )
+                      : _imagePlaceholder(isDark),
                 ),
               ),
 
-              // ── İçerik ─────────────────────────────────────────────────────
+              // ── İçerik ───────────────────────────────────────────────────
               SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-
-                      // Kategori chip
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: (AppColors.categoryColors[recipe.category] ?? AppColors.textGrey).withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          '${AppCategories.getEmojiByKey(recipe.category)} ${AppCategories.getLabelByKey(recipe.category, isEnglish: s.isEnglish)}',
-                          style: TextStyle(
-                            color: AppColors.categoryColors[recipe.category] ?? AppColors.textGrey,
-                            fontWeight: FontWeight.w600,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: isDark ? AppColors.darkBackground : AppColors.background,
+                    borderRadius: const BorderRadius.vertical(
+                        top: Radius.circular(24)),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Kategori
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(999),
                           ),
+                          child: Text(recipe.category,
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.primary,
+                                  fontWeight: FontWeight.w600)),
                         ),
-                      ),
-                      const SizedBox(height: 12),
+                        const SizedBox(height: 10),
 
-                      // Başlık
-                      Text(recipe.localizedTitle(langCode),
-                          style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold,
-                              color: isDark ? AppColors.darkTextDark : AppColors.textDark)),
-                      const SizedBox(height: 10),
+                        // Başlık
+                        Text(recipe.title,
+                            style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.w800,
+                                color: isDark
+                                    ? AppColors.darkTextDark
+                                    : AppColors.textDark)),
+                        const SizedBox(height: 10),
 
-                      // Yıldızlar
-                      Row(children: [
-                        ...List.generate(5, (i) => Icon(
-                          i < recipe.averageRating.round()
-                              ? Icons.star_rounded : Icons.star_outline_rounded,
-                          color: Colors.amber, size: 22,
-                        )),
-                        const SizedBox(width: 8),
-                        Text(
-                          recipe.ratingCount > 0
-                              ? '${recipe.averageRating.toStringAsFixed(1)} (${s.ratingCount(recipe.ratingCount)})'
-                              : s.noRating,
-                          style: TextStyle(fontSize: 13,
-                              color: isDark ? AppColors.darkTextGrey : AppColors.textGrey),
-                        ),
-                      ]),
-                      const SizedBox(height: 16),
-
-                      // Meta kutular (süre / kişi / zorluk / kalori)
-                      _buildMetaRow(recipe, s, isDark),
-                      const SizedBox(height: 16),
-
-                      // Diyet etiketleri
-                      if (recipe.dietTags.isNotEmpty) ...[
-                        Wrap(spacing: 8, runSpacing: 4,
-                            children: recipe.dietTags.map((t) => _dietTag(t, s, isDark)).toList()),
-                        const SizedBox(height: 16),
-                      ],
-
-                      // Favori sayısı
-                      Row(children: [
-                        const Icon(Icons.favorite, color: Colors.red, size: 16),
-                        const SizedBox(width: 6),
-                        Text(s.favoriteCount(recipe.favoriteCount),
+                        // Yıldızlar
+                        Row(children: [
+                          ...List.generate(5, (i) => Icon(
+                            i < recipe.averageRating.round()
+                                ? Icons.star_rounded
+                                : Icons.star_outline_rounded,
+                            color: Colors.amber, size: 22,
+                          )),
+                          const SizedBox(width: 8),
+                          Text(
+                            recipe.ratingCount > 0
+                                ? '${recipe.averageRating.toStringAsFixed(1)} (${s.ratingCount(recipe.ratingCount)})'
+                                : s.noRating,
                             style: TextStyle(fontSize: 13,
-                                color: isDark ? AppColors.darkTextGrey : AppColors.textGrey)),
-                      ]),
-                      const SizedBox(height: 16),
+                                color: isDark
+                                    ? AppColors.darkTextGrey
+                                    : AppColors.textGrey),
+                          ),
+                        ]),
+                        const SizedBox(height: 16),
 
-                      // Yazar kartı
-                      _buildAuthorCard(recipe, isDark, s),
-                      const SizedBox(height: 20),
+                        // Meta
+                        _buildMetaRow(recipe, s, isDark),
+                        const SizedBox(height: 16),
 
-                      // Açıklama
-                      Text(recipe.localizedDescription(langCode),
-                          style: TextStyle(fontSize: 15, height: 1.6,
-                              color: isDark ? AppColors.darkTextGrey : AppColors.textMedium)),
-                      const SizedBox(height: 24),
+                        // Diyet etiketleri
+                        if (recipe.dietTags.isNotEmpty) ...[
+                          Wrap(spacing: 8, runSpacing: 4,
+                              children: recipe.dietTags
+                                  .map((t) => _dietTag(t, s, isDark))
+                                  .toList()),
+                          const SizedBox(height: 16),
+                        ],
 
-                      // Porsiyon ayarlayıcı
-                      _buildServingSelector(s, isDark, recipe),
-                      const SizedBox(height: 20),
+                        // Favori sayısı
+                        Row(children: [
+                          const Icon(Icons.favorite,
+                              color: Colors.red, size: 16),
+                          const SizedBox(width: 6),
+                          Text(s.favoriteCount(recipe.favoriteCount),
+                              style: TextStyle(fontSize: 13,
+                                  color: isDark
+                                      ? AppColors.darkTextGrey
+                                      : AppColors.textGrey)),
+                        ]),
+                        const SizedBox(height: 16),
 
-                      // Malzemeler
-                      _buildSection(
-                        title: '🥕 ${s.ingredients} (${localIngredients.length})',
-                        isDark: isDark,
-                        children: localIngredients
-                            .map((i) => _buildBulletItem(_scaleIngredient(i), isDark))
-                            .toList(),
-                      ),
-                      const SizedBox(height: 24),
+                        // Yazar kartı
+                        _buildAuthorCard(recipe, isDark, s),
+                        const SizedBox(height: 20),
 
-                      // Yapılış
-                      _buildSection(
-                        title: '👨‍🍳 ${s.steps}',
-                        isDark: isDark,
-                        children: recipe.localizedSteps(langCode).asMap().entries.map((e) {
-                          return Padding(
+                        // Açıklama
+                        Text(recipe.localizedDescription(langCode),
+                            style: TextStyle(fontSize: 15, height: 1.6,
+                                color: isDark
+                                    ? AppColors.darkTextGrey
+                                    : AppColors.textMedium)),
+                        const SizedBox(height: 24),
+
+                        // Porsiyon
+                        _buildServingSelector(s, isDark, recipe),
+                        const SizedBox(height: 20),
+
+                        // Malzemeler
+                        _buildSection(
+                          title: '🥕 ${s.ingredients} (${localIngredients.length})',
+                          isDark: isDark,
+                          children: localIngredients
+                              .map((i) => _buildBulletItem(
+                              _scaleIngredient(i), isDark))
+                              .toList(),
+                        ),
+                        const SizedBox(height: 24),
+
+                        // Yapılış
+                        _buildSection(
+                          title: '👨‍🍳 ${s.steps}',
+                          isDark: isDark,
+                          children: recipe.localizedSteps(langCode)
+                              .asMap().entries.map((e) => Padding(
                             padding: const EdgeInsets.only(bottom: 14),
-                            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                              CircleAvatar(
-                                radius: 14,
-                                backgroundColor: AppColors.primary.withOpacity(0.15),
-                                child: Text('${e.key + 1}',
-                                    style: const TextStyle(
-                                        fontSize: 12, color: AppColors.primary, fontWeight: FontWeight.bold)),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(child: Text(e.value,
-                                  style: TextStyle(fontSize: 14, height: 1.5,
-                                      color: isDark ? AppColors.darkTextDark : AppColors.textDark))),
-                            ]),
-                          );
-                        }).toList(),
-                      ),
-                      const SizedBox(height: 24),
+                            child: Row(
+                                crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                                children: [
+                                  CircleAvatar(
+                                    radius: 14,
+                                    backgroundColor:
+                                    AppColors.primary.withOpacity(0.15),
+                                    child: Text('${e.key + 1}',
+                                        style: const TextStyle(
+                                            fontSize: 12,
+                                            color: AppColors.primary,
+                                            fontWeight: FontWeight.bold)),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(child: Text(e.value,
+                                      style: TextStyle(
+                                          fontSize: 14, height: 1.5,
+                                          color: isDark
+                                              ? AppColors.darkTextDark
+                                              : AppColors.textDark))),
+                                ]),
+                          )).toList(),
+                        ),
+                        const SizedBox(height: 24),
 
-                      // Yorum formu
-                      if (!widget.isGuest) _buildCommentForm(recipe, isDark, s),
+                        // ── Yorum bölümü ──────────────────────────────────
+                        _buildCommentSection(recipe, isDark, s),
 
-                      // Yorumlar listesi
-                      _buildCommentsList(recipe, isDark, s),
-                      const SizedBox(height: 40),
-                    ],
+                        // Yorumlar listesi
+                        _buildCommentsList(recipe, isDark, s),
+                        const SizedBox(height: 40),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -485,6 +533,14 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
       },
     );
   }
+
+  // ─── Image placeholder ────────────────────────────────────────────────────
+
+  Widget _imagePlaceholder(bool isDark) => Container(
+    color: isDark ? AppColors.darkCard : AppColors.surfaceContainer,
+    child: const Center(child: Icon(Icons.restaurant_outlined,
+        size: 64, color: AppColors.textGrey)),
+  );
 
   // ─── Meta row ────────────────────────────────────────────────────────────
 
@@ -503,7 +559,8 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
             s.isEnglish ? 'serv.' : 'kişi', isDark: isDark),
         _vDivider(isDark),
         _infoBox(Icons.bar_chart_rounded, _difficultyLabel(recipe.difficulty),
-            s.difficulty, isDark: isDark, color: _difficultyColor(recipe.difficulty)),
+            s.difficulty,
+            isDark: isDark, color: _difficultyColor(recipe.difficulty)),
         if (recipe.calories != null) ...[
           _vDivider(isDark),
           _infoBox(Icons.local_fire_department_outlined,
@@ -516,13 +573,13 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
   Widget _infoBox(IconData icon, String value, String label,
       {required bool isDark, Color? color}) {
     return Expanded(child: Column(children: [
-      Icon(icon, size: 20, color: color ?? (isDark ? AppColors.darkTextGrey : AppColors.textGrey)),
+      Icon(icon, size: 20,
+          color: color ?? (isDark ? AppColors.darkTextGrey : AppColors.textGrey)),
       const SizedBox(height: 4),
-      Text(value, style: TextStyle(
-          fontSize: 16, fontWeight: FontWeight.w700,
+      Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700,
           color: color ?? (isDark ? AppColors.darkTextDark : AppColors.textDark))),
-      Text(label, style: TextStyle(
-          fontSize: 11, color: isDark ? AppColors.darkTextGrey : AppColors.textGrey)),
+      Text(label, style: TextStyle(fontSize: 11,
+          color: isDark ? AppColors.darkTextGrey : AppColors.textGrey)),
     ]));
   }
 
@@ -542,30 +599,38 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
       ),
       child: Row(children: [
         Icon(Icons.people_outline,
-            color: isDark ? AppColors.darkTextGrey : AppColors.textGrey, size: 20),
+            color: isDark ? AppColors.darkTextGrey : AppColors.textGrey,
+            size: 20),
         const SizedBox(width: 10),
-        Text(s.servings, style: TextStyle(
-            fontWeight: FontWeight.w600, fontSize: 15,
+        Text(s.servings, style: TextStyle(fontWeight: FontWeight.w600,
+            fontSize: 15,
             color: isDark ? AppColors.darkTextDark : AppColors.textDark)),
         const Spacer(),
         GestureDetector(
-          onTap: _servingMultiplier > 1 ? () => setState(() => _servingMultiplier--) : null,
+          onTap: _servingMultiplier > 1
+              ? () => setState(() => _servingMultiplier--)
+              : null,
           child: Container(
             width: 36, height: 36,
             decoration: BoxDecoration(
               color: _servingMultiplier > 1
-                  ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
+                  ? AppColors.primary.withOpacity(0.1)
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: AppColors.primary.withOpacity(0.3)),
             ),
             child: Icon(Icons.remove_rounded,
-                color: _servingMultiplier > 1 ? AppColors.primary : AppColors.textGrey, size: 18),
+                color: _servingMultiplier > 1
+                    ? AppColors.primary
+                    : AppColors.textGrey,
+                size: 18),
           ),
         ),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Text('$_servingMultiplier',
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: AppColors.primary)),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700,
+                  color: AppColors.primary)),
         ),
         GestureDetector(
           onTap: () => setState(() => _servingMultiplier++),
@@ -576,7 +641,8 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: AppColors.primary.withOpacity(0.3)),
             ),
-            child: const Icon(Icons.add_rounded, color: AppColors.primary, size: 18),
+            child: const Icon(Icons.add_rounded,
+                color: AppColors.primary, size: 18),
           ),
         ),
       ]),
@@ -585,7 +651,8 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
 
   // ─── Section ─────────────────────────────────────────────────────────────
 
-  Widget _buildSection({required String title, required bool isDark, required List<Widget> children}) {
+  Widget _buildSection({required String title, required bool isDark,
+    required List<Widget> children}) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold,
           color: isDark ? AppColors.darkTextDark : AppColors.textDark)),
@@ -602,13 +669,13 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
           padding: const EdgeInsets.only(top: 6),
           child: Container(
             width: 8, height: 8,
-            decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
+            decoration: const BoxDecoration(
+                color: AppColors.primary, shape: BoxShape.circle),
           ),
         ),
         const SizedBox(width: 12),
-        Expanded(child: Text(text,
-            style: TextStyle(fontSize: 14, height: 1.5,
-                color: isDark ? AppColors.darkTextDark : AppColors.textDark))),
+        Expanded(child: Text(text, style: TextStyle(fontSize: 14, height: 1.5,
+            color: isDark ? AppColors.darkTextDark : AppColors.textDark))),
       ]),
     );
   }
@@ -631,7 +698,8 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
         border: Border.all(color: Colors.green.withOpacity(0.3)),
       ),
       child: Text(labels[tag] ?? tag,
-          style: const TextStyle(fontSize: 12, color: Colors.green, fontWeight: FontWeight.w600)),
+          style: const TextStyle(fontSize: 12, color: Colors.green,
+              fontWeight: FontWeight.w600)),
     );
   }
 
@@ -639,23 +707,27 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
 
   Widget _buildAuthorCard(RecipeModel recipe, bool isDark, AppStrings s) {
     return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance.collection('users').doc(recipe.userId).snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection('users').doc(recipe.userId).snapshots(),
       builder: (ctx, snap) {
         final ud = snap.data?.data() as Map<String, dynamic>?;
         final photoUrl = ud?['photoUrl'] as String?;
-        final name = ud?['displayName'] as String? ?? recipe.userEmail.split('@').first;
+        final name = ud?['displayName'] as String?
+            ?? recipe.userEmail.split('@').first;
 
         return GestureDetector(
           onTap: () => Navigator.push(ctx, MaterialPageRoute(
-            builder: (_) => UserProfileScreen(
-              userId: recipe.userId, userName: name,
-              userEmail: recipe.userEmail, strings: widget.strings, isGuest: widget.isGuest,
-            ),
-          )),
+              builder: (_) => UserProfileScreen(
+                userId: recipe.userId, userName: name,
+                userEmail: recipe.userEmail, strings: widget.strings,
+                isGuest: widget.isGuest,
+              ))),
           child: Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: isDark ? AppColors.darkCard : AppColors.primary.withOpacity(0.06),
+              color: isDark
+                  ? AppColors.darkCard
+                  : AppColors.primary.withOpacity(0.06),
               borderRadius: BorderRadius.circular(14),
               border: Border.all(color: AppColors.primary.withOpacity(0.2)),
             ),
@@ -663,7 +735,8 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
               Container(
                 width: 44, height: 44,
                 decoration: const BoxDecoration(
-                  gradient: LinearGradient(colors: [Color(0xFFCB490E), Color(0xFFE8784A)],
+                  gradient: LinearGradient(
+                      colors: [Color(0xFFCB490E), Color(0xFFE8784A)],
                       begin: Alignment.topLeft, end: Alignment.bottomRight),
                   shape: BoxShape.circle,
                 ),
@@ -675,14 +748,24 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
                 ),
               ),
               const SizedBox(width: 12),
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(name, style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15,
-                    color: isDark ? AppColors.darkTextDark : AppColors.textDark)),
-                Text(s.isEnglish ? 'Tap to see all recipes' : 'Tüm tarifleri görmek için tıkla',
-                    style: const TextStyle(fontSize: 12, color: AppColors.primary)),
-              ])),
+              Expanded(child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(name, style: TextStyle(fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        color: isDark
+                            ? AppColors.darkTextDark
+                            : AppColors.textDark)),
+                    Text(s.isEnglish
+                        ? 'Tap to see all recipes'
+                        : 'Tüm tarifleri görmek için tıkla',
+                        style: const TextStyle(
+                            fontSize: 12, color: AppColors.primary)),
+                  ])),
               Icon(Icons.chevron_right_rounded,
-                  color: isDark ? AppColors.darkTextGrey : AppColors.textGrey),
+                  color: isDark
+                      ? AppColors.darkTextGrey
+                      : AppColors.textGrey),
             ]),
           ),
         );
@@ -694,11 +777,66 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
     color: Colors.white.withOpacity(0.2),
     child: Center(child: Text(
       (name.isNotEmpty ? name : 'U')[0].toUpperCase(),
-      style: const TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold),
+      style: const TextStyle(fontSize: 18, color: Colors.white,
+          fontWeight: FontWeight.bold),
     )),
   );
 
-  // ─── Yorum formu ─────────────────────────────────────────────────────────
+  // ─── Yorum bölümü ─────────────────────────────────────────────────────────
+  // Misafir ise: fotoğraftaki popup içeriği doğrudan sayfada gösterilir.
+  // Giriş yapılmışsa: normal yorum formu gösterilir.
+
+  Widget _buildCommentSection(RecipeModel recipe, bool isDark, AppStrings s) {
+    if (widget.isGuest) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(
+          s.isEnglish ? 'Rate & Comment' : 'Yorum Yap',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold,
+              color: isDark ? AppColors.darkTextDark : AppColors.textDark),
+        ),
+        const SizedBox(height: 12),
+        Row(children: [
+          Text(s.yourRating,
+              style: TextStyle(
+                  color: isDark ? AppColors.darkTextGrey : AppColors.textGrey)),
+          ...List.generate(5, (i) => GestureDetector(
+            onTap: _showGuestDialog,
+            child: const Icon(Icons.star_outline_rounded,
+                color: Colors.amber, size: 30),
+          )),
+        ]),
+        const SizedBox(height: 16),
+        Divider(color: isDark ? const Color(0xFF3D3530) : AppColors.outline),
+        const SizedBox(height: 12),
+        Text(s.loginRequired,
+            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600,
+                color: isDark ? AppColors.darkTextDark : AppColors.textDark)),
+        const SizedBox(height: 6),
+        Text(s.loginRequiredMsg,
+            style: TextStyle(fontSize: 13, height: 1.45,
+                color: isDark ? AppColors.darkTextGrey : AppColors.textGrey)),
+        const SizedBox(height: 16),
+        Align(
+          alignment: Alignment.centerRight,
+          child: ElevatedButton(
+            onPressed: _goToLogin,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+            child: Text(s.login,
+                style: const TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ),
+        const SizedBox(height: 24),
+      ]);
+    }
+
+    return _buildCommentForm(recipe, isDark, s);
+  }
 
   Widget _buildCommentForm(RecipeModel recipe, bool isDark, AppStrings s) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -708,28 +846,24 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
       const SizedBox(height: 10),
       Row(children: [
         Text(s.yourRating,
-            style: TextStyle(color: isDark ? AppColors.darkTextGrey : AppColors.textGrey)),
+            style: TextStyle(
+                color: isDark ? AppColors.darkTextGrey : AppColors.textGrey)),
         ...List.generate(5, (i) => GestureDetector(
           onTap: () => setState(() => _userRating = i + 1.0),
           child: Icon(
-            i < _userRating ? Icons.star_rounded : Icons.star_outline_rounded,
+            i < _userRating
+                ? Icons.star_rounded
+                : Icons.star_outline_rounded,
             color: Colors.amber, size: 30,
           ),
         )),
       ]),
       const SizedBox(height: 10),
       Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-        // YENİ - misafirse tıklayınca dialog aç
-        Expanded(child: GestureDetector(
-          onTap: widget.isGuest ? _showGuestWarning : null,
-          child: AbsorbPointer(
-            absorbing: widget.isGuest,
-            child: TextField(
-              controller: _commentController,
-              minLines: 1, maxLines: 3,
-              decoration: InputDecoration(hintText: s.writeComment),
-            ),
-          ),
+        Expanded(child: TextField(
+          controller: _commentController,
+          minLines: 1, maxLines: 3,
+          decoration: InputDecoration(hintText: s.writeComment),
         )),
         const SizedBox(width: 10),
         GestureDetector(
@@ -737,7 +871,8 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
           child: Container(
             width: 48, height: 48,
             decoration: BoxDecoration(
-              color: AppColors.primary, borderRadius: BorderRadius.circular(14),
+              color: AppColors.primary,
+              borderRadius: BorderRadius.circular(14),
             ),
             child: const Icon(Icons.send_rounded, color: Colors.white, size: 20),
           ),
@@ -757,51 +892,101 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             const Text('💬 ', style: TextStyle(fontSize: 18)),
-            Text(s.comments, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold,
+            Text(s.comments, style: TextStyle(fontSize: 18,
+                fontWeight: FontWeight.bold,
                 color: isDark ? AppColors.darkTextDark : AppColors.textDark)),
           ]),
           const SizedBox(height: 12),
           if (docs.isEmpty)
             Text(s.noComments,
-                style: TextStyle(color: isDark ? AppColors.darkTextGrey : AppColors.textGrey))
+                style: TextStyle(
+                    color: isDark
+                        ? AppColors.darkTextGrey
+                        : AppColors.textGrey))
           else
             ...docs.map((doc) {
               final data = doc.data() as Map<String, dynamic>;
               final rating = (data['rating'] as num?)?.toDouble() ?? 0;
-              final currentUser = FirebaseAuth.instance.currentUser;
-              final isMyComment = currentUser?.uid == data['userId'];
+              final userName = data['userName'] as String? ?? 'Kullanıcı';
+              final userId  = data['userId']   as String?;
+              final text = data['text'] as String? ?? '';
+              final ts = data['createdAt'] as Timestamp?;
+              final date = ts != null
+                  ? '${ts.toDate().day}.${ts.toDate().month}.${ts.toDate().year}'
+                  : '';
 
               return Container(
-                margin: const EdgeInsets.only(bottom: 10),
+                margin: const EdgeInsets.only(bottom: 12),
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: isDark ? AppColors.darkCard : AppColors.surfaceContainer,
+                  color: isDark ? AppColors.darkCard : Colors.white,
                   borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                      color: isDark
+                          ? const Color(0xFF3D3530)
+                          : AppColors.outline.withOpacity(0.5)),
                 ),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [
-                    Text(data['userName'] ?? '',
-                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13,
-                            color: isDark ? AppColors.darkTextDark : AppColors.textDark)),
-                    const Spacer(),
-                    Row(children: List.generate(5, (i) => Icon(
-                      i < rating.round() ? Icons.star_rounded : Icons.star_outline_rounded,
-                      size: 14, color: Colors.amber,
-                    ))),
-                    if (isMyComment || widget.isAdmin)
-                      GestureDetector(
-                        onTap: () => _recipeService.deleteComment(recipe.id, doc.id),
-                        child: const Padding(
-                          padding: EdgeInsets.only(left: 8),
-                          child: Icon(Icons.delete_outline, size: 16, color: Colors.red),
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(children: [
+                        // Profil fotoğrafı — Firestore'dan çek
+                        FutureBuilder<DocumentSnapshot>(
+                          future: userId != null
+                              ? FirebaseFirestore.instance
+                              .collection('users').doc(userId).get()
+                              : Future.value(null),
+                          builder: (ctx, snap) {
+                            final ud = snap.data?.data() as Map<String, dynamic>?;
+                            final photoUrl = ud?['photoUrl'] as String?;
+                            return CircleAvatar(
+                              radius: 16,
+                              backgroundColor: AppColors.primary.withOpacity(0.15),
+                              backgroundImage: photoUrl != null && photoUrl.isNotEmpty
+                                  ? NetworkImage(photoUrl)
+                                  : null,
+                              child: photoUrl == null || photoUrl.isEmpty
+                                  ? Text(
+                                (userName.isNotEmpty ? userName : 'U')[0].toUpperCase(),
+                                style: const TextStyle(
+                                    color: AppColors.primary,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 13),
+                              )
+                                  : null,
+                            );
+                          },
                         ),
-                      ),
-                  ]),
-                  const SizedBox(height: 6),
-                  Text(data['text'] ?? '',
-                      style: TextStyle(fontSize: 13,
-                          color: isDark ? AppColors.darkTextGrey : AppColors.textMedium)),
-                ]),
+                        const SizedBox(width: 10),
+                        Expanded(child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(userName, style: TextStyle(
+                                  fontWeight: FontWeight.w600, fontSize: 13,
+                                  color: isDark
+                                      ? AppColors.darkTextDark
+                                      : AppColors.textDark)),
+                              if (date.isNotEmpty)
+                                Text(date, style: TextStyle(fontSize: 11,
+                                    color: isDark
+                                        ? AppColors.darkTextGrey
+                                        : AppColors.textGrey)),
+                            ])),
+                        Row(children: List.generate(5, (i) => Icon(
+                          i < rating.round()
+                              ? Icons.star_rounded
+                              : Icons.star_outline_rounded,
+                          color: Colors.amber, size: 14,
+                        ))),
+                      ]),
+                      if (text.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text(text, style: TextStyle(fontSize: 13, height: 1.4,
+                            color: isDark
+                                ? AppColors.darkTextGrey
+                                : AppColors.textMedium)),
+                      ],
+                    ]),
               );
             }),
         ]);
@@ -809,38 +994,46 @@ class _RecipeDetailScreenState extends State<RecipeDetailScreen> {
     );
   }
 
-  Widget _placeholderHeader(bool isDark) => Container(
-    color: isDark ? AppColors.darkCard : AppColors.surfaceContainerHigh,
-    child: Center(child: Icon(Icons.restaurant_menu_outlined, size: 64,
-        color: isDark ? AppColors.darkTextGrey : AppColors.textGrey)),
-  );
+  // ─── Yardımcılar ─────────────────────────────────────────────────────────
 
   String _difficultyLabel(String d) {
-    final s = widget.strings;
-    switch (d) {
-      case 'easy': return s.easy;
-      case 'hard': return s.hard;
-      default:     return s.medium;
-    }
+    if (d == 'easy') return widget.strings.easy;
+    if (d == 'medium') return widget.strings.medium;
+    return widget.strings.hard;
   }
 
   Color _difficultyColor(String d) {
-    switch (d) {
-      case 'easy': return const Color(0xFF2E7D32);
-      case 'hard': return const Color(0xFFBA1A1A);
-      default:     return const Color(0xFFE65100);
-    }
+    if (d == 'easy') return Colors.green;
+    if (d == 'medium') return Colors.orange;
+    return Colors.red;
+  }
+
+  String _scaleIngredient(String ingredient) {
+    final orig = widget.recipe.servings;
+    if (orig == _servingMultiplier || orig == 0) return ingredient;
+    final ratio = _servingMultiplier / orig;
+    return ingredient.replaceAllMapped(RegExp(r'(\d+(?:[.,]\d+)?)'), (m) {
+      final v = double.tryParse(m.group(1)!.replaceAll(',', '.'));
+      if (v == null) return m.group(0)!;
+      final scaled = v * ratio;
+      if (scaled == scaled.roundToDouble()) return scaled.toInt().toString();
+      return scaled.toStringAsFixed(1);
+    });
   }
 }
 
-// ─── Paylaşım seçenek butonu ──────────────────────────────────────────────────
+// ─── Share Option widget ──────────────────────────────────────────────────────
 
 class _ShareOption extends StatelessWidget {
   final IconData icon;
   final String label;
   final Color color;
   final VoidCallback onTap;
-  const _ShareOption({required this.icon, required this.label, required this.color, required this.onTap});
+
+  const _ShareOption({
+    required this.icon, required this.label,
+    required this.color, required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -848,12 +1041,14 @@ class _ShareOption extends StatelessWidget {
       onTap: onTap,
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Container(
-          width: 64, height: 64,
-          decoration: BoxDecoration(color: color.withOpacity(0.1), shape: BoxShape.circle),
-          child: Icon(icon, color: color, size: 28),
+          width: 56, height: 56,
+          decoration: BoxDecoration(
+              color: color.withOpacity(0.12), shape: BoxShape.circle),
+          child: Icon(icon, color: color, size: 26),
         ),
         const SizedBox(height: 8),
-        Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: color)),
+        Text(label, style: TextStyle(fontSize: 12, color: color,
+            fontWeight: FontWeight.w500)),
       ]),
     );
   }

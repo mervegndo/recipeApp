@@ -1092,6 +1092,7 @@ class _HomeTabState extends State<_HomeTab> {
                           isGuest: widget.isGuest,
                           isAdmin: widget.isAdmin,
                           strings: widget.strings,
+                          onExitGuest: widget.onExitGuest,
                         ),
                       )),
                       onDelete: widget.isAdmin ? () => _adminDelete(recipes[i].id) : null,
